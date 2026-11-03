@@ -1,0 +1,325 @@
+// FlagTrack data model.
+// Development uses SQLite; for production switch `provider` to "postgresql"
+// (no other change is needed — enums are stored as validated strings).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  profile         AthleteProfile?
+  weights         WeightEntry[]
+  activities      Activity[]
+  championships   Championship[]
+  stages          Stage[]
+  games           Game[]
+  gameStats       GameStat[]
+  challenges      Challenge[]
+  attempts        ChallengeAttempt[]
+  collectives     Collective[]
+  collectiveStats CollectiveStat[]
+  goals           WeeklyGoal[]
+  xpEntries       XpEntry[]
+  achievements    Achievement[]
+  pushSubs        PushSubscription[]
+}
+
+model AthleteProfile {
+  id             String    @id @default(cuid())
+  userId         String    @unique
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName       String
+  /// JSON array of position labels (configurable per team nomenclature)
+  positions      String    @default("[]")
+  /// Not unique: different teams can use the same number.
+  jerseyNumber   Int?
+  photo          Bytes?
+  photoMime      String?
+  photoUpdatedAt DateTime?
+  birthDate      String?
+  heightCm       Float?
+  timezone       String    @default("America/Sao_Paulo")
+  inAppReminders Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model WeightEntry {
+  id         String   @id @default(cuid())
+  userId     String
+  /// Demonstration record (clearly labeled, removable in Configurações)
+  isDemo     Boolean  @default(false)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  weightKg   Float
+  date       String
+  recordedAt DateTime @default(now())
+
+  @@index([userId, date])
+}
+
+model Activity {
+  id              String             @id @default(cuid())
+  userId          String
+  /// Demonstration record (clearly labeled, removable in Configurações)
+  isDemo          Boolean            @default(false)
+  user            User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId        String?
+  seriesId        String?
+  title           String
+  category        String
+  description     String?
+  /// Sporting day in the athlete's time zone (YYYY-MM-DD)
+  date            String
+  startTime       String?
+  endTime         String?
+  durationMin     Int?
+  location        String?
+  notes           String?
+  isFlagRelated   Boolean            @default(true)
+  /// PLANNED | COMPLETED | MISSED | CANCELLED
+  status          String             @default("PLANNED")
+  completionNotes String?
+  /// Trusted server time of completion
+  completedAt     DateTime?
+  startsAt        DateTime?
+  reminderType    String             @default("NONE")
+  reminderTime    String?
+  reminderAt      DateTime?
+  reminderSentAt  DateTime?
+  gameId          String?
+  game            Game?              @relation(fields: [gameId], references: [id], onDelete: SetNull)
+  collectiveId    String?
+  collective      Collective?        @relation(fields: [collectiveId], references: [id], onDelete: SetNull)
+  attempts        ChallengeAttempt[]
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  @@unique([userId, clientId])
+  @@index([userId, date])
+  @@index([reminderAt])
+}
+
+model Championship {
+  id          String   @id @default(cuid())
+  userId      String
+  /// Demonstration record (clearly labeled, removable in Configurações)
+  isDemo      Boolean  @default(false)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  season      String
+  teamName    String
+  description String?
+  startDate   String
+  endDate     String?
+  location    String?
+  /// PLANNED | ONGOING | FINISHED
+  status      String
+  notes       String?
+  archived    Boolean  @default(false)
+  stages      Stage[]
+  games       Game[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Stage {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  championshipId String
+  championship   Championship @relation(fields: [championshipId], references: [id], onDelete: Cascade)
+  name           String
+  order          Int
+  startDate      String?
+  endDate        String?
+  location       String?
+  notes          String?
+  games          Game[]
+  createdAt      DateTime     @default(now())
+
+  @@index([championshipId])
+}
+
+model Game {
+  id             String       @id @default(cuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId       String?
+  championshipId String
+  championship   Championship @relation(fields: [championshipId], references: [id], onDelete: Cascade)
+  stageId        String
+  stage          Stage        @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  opponent       String
+  date           String
+  time           String?
+  code           String?
+  teamScore      Int?
+  opponentScore  Int?
+  /// WIN | LOSS | DRAW
+  result         String?
+  /// SCHEDULED | PLAYED | CANCELLED
+  status         String
+  notes          String?
+  stat           GameStat?
+  activities     Activity[]
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@unique([userId, clientId])
+  @@index([userId, date])
+}
+
+/// Individual athlete stats for one game. Absence of the row = not informed;
+/// a null field = that indicator not informed; 0 = informed as zero.
+model GameStat {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gameId        String   @unique
+  game          Game     @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  tdPass        Int?
+  tdRun         Int?
+  tdRec         Int?
+  sacks         Int?
+  deflections   Int?
+  interceptions Int?
+  pickSix       Int?
+  updatedAt     DateTime @updatedAt
+}
+
+model Collective {
+  id          String          @id @default(cuid())
+  userId      String
+  /// Demonstration record (clearly labeled, removable in Configurações)
+  isDemo      Boolean         @default(false)
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId    String?
+  name        String
+  date        String
+  time        String?
+  location    String?
+  description String?
+  opponent    String?
+  /// SCHEDULED | PLAYED | CANCELLED
+  status      String
+  notes       String?
+  stat        CollectiveStat?
+  activities  Activity[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@unique([userId, clientId])
+  @@index([userId, date])
+}
+
+model CollectiveStat {
+  id            String     @id @default(cuid())
+  userId        String
+  user          User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  collectiveId  String     @unique
+  collective    Collective @relation(fields: [collectiveId], references: [id], onDelete: Cascade)
+  tdPass        Int?
+  tdRun         Int?
+  tdRec         Int?
+  sacks         Int?
+  deflections   Int?
+  interceptions Int?
+  pickSix       Int?
+  updatedAt     DateTime   @updatedAt
+}
+
+model Challenge {
+  id          String             @id @default(cuid())
+  userId      String
+  /// Demonstration record (clearly labeled, removable in Configurações)
+  isDemo      Boolean            @default(false)
+  user        User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  /// LAPS | TIME
+  measureType String
+  unit        String
+  archived    Boolean            @default(false)
+  attempts    ChallengeAttempt[]
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+
+  @@index([userId])
+}
+
+model ChallengeAttempt {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  clientId    String?
+  challengeId String
+  challenge   Challenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  date        String
+  performedAt DateTime
+  /// Laps, or seconds for TIME challenges
+  value       Float
+  notes       String?
+  activityId  String?
+  activity    Activity? @relation(fields: [activityId], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@unique([userId, clientId])
+  @@index([challengeId, performedAt])
+}
+
+model WeeklyGoal {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  target    Int
+  category  String?
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+/// XP ledger. `key` identifies the rewarded source, making rewards idempotent.
+model XpEntry {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  key       String
+  amount    Int
+  reason    String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, key])
+}
+
+model Achievement {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code       String
+  unlockedAt DateTime @default(now())
+
+  @@unique([userId, code])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+}

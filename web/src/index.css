@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens — change the palette here (RGB triplets). */
+:root {
+  --bg: 10 12 14;
+  --surface: 22 25 29;
+  --surface-2: 31 35 40;
+  --line: 46 52 59;
+  --text: 240 243 245;
+  --muted: 148 157 167;
+  --accent: 46 213 101;
+  --accent-ink: 4 22 10;
+  --flame: 255 138 30;
+  --danger: 248 113 113;
+  --success: 46 213 101;
+  --info: 47 124 246;
+  --warn: 250 204 21;
+  color-scheme: dark;
+}
+
+@layer base {
+  html, body, #root { min-height: 100%; }
+  body {
+    @apply bg-bg text-text font-sans antialiased;
+    -webkit-tap-highlight-color: transparent;
+    background-image: radial-gradient(1200px 400px at 80% -10%, rgb(var(--accent) / 0.06), transparent 60%);
+    background-attachment: fixed;
+  }
+  h1, h2, h3 { @apply font-display tracking-wide; }
+  :focus-visible { outline: 2px solid rgb(var(--accent)); outline-offset: 2px; }
+  input[type='number']::-webkit-inner-spin-button { -webkit-appearance: none; }
+  input[type='date']::-webkit-calendar-picker-indicator,
+  input[type='time']::-webkit-calendar-picker-indicator { filter: invert(0.8); }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+  }
+}
+
+@layer components {
+  .card { @apply rounded-2xl border border-line/60 bg-surface; }
+  .input {
+    @apply w-full rounded-xl border border-line bg-surface2 px-3.5 py-2.5 text-[15px] text-text placeholder:text-muted/70
+      transition focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent/30 disabled:opacity-50;
+  }
+  .label { @apply mb-1.5 block text-xs font-semibold uppercase tracking-wider text-muted; }
+  .chip { @apply inline-flex items-center gap-1 rounded-full border border-line bg-surface2 px-3 py-1.5 text-sm font-medium text-muted transition; }
+  .chip-on { @apply border-accent bg-accent/15 text-accent; }
+  .skeleton { @apply rounded-xl bg-surface2; background-image: linear-gradient(90deg, transparent, rgb(255 255 255 / 0.05), transparent); background-size: 400px 100%; animation: shimmer 1.4s linear infinite; }
+  .tabular { font-variant-numeric: tabular-nums; }
+}
+
+.safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+.scrollbar-none { scrollbar-width: none; }
