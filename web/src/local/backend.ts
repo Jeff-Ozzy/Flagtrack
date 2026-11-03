@@ -49,7 +49,7 @@ function errorResult(err: unknown): LocalResult {
   let out: LocalResult = { status: 500, data: null };
   const res = {
     status(c: number) { out.status = c; return res; },
-    json(d: unknown) { out = { ...out, data: d }; },
+    json(d: unknown) { out = { ...out, data: JSON.parse(JSON.stringify(d)) }; },
   };
   if ((err as { code?: string })?.code === 'P2025') err = new HttpError(404, 'Registro não encontrado.', 'NOT_FOUND');
   errorHandler(err, {} as never, res as never, (() => {}) as never);
@@ -81,11 +81,13 @@ export async function localRequest(method: string, pathWithQuery: string, body?:
       userId: LOCAL_USER_ID,
     };
     let status = 200;
+    // Same wire format as HTTP: Dates become ISO strings, so screens behave identically in both modes.
+    const wire = (d: unknown) => (d === undefined ? null : JSON.parse(JSON.stringify(d)));
     const res: ShimResponse = {
       statusCode: 200,
       status(c) { status = c; res.statusCode = c; return res; },
-      json(d) { resolve({ status, data: d }); },
-      send(d) { resolve({ status, data: d }); },
+      json(d) { resolve({ status, data: wire(d) }); },
+      send(d) { resolve({ status, data: wire(d) }); },
       setHeader() {},
       end() { resolve({ status, data: null }); },
     };

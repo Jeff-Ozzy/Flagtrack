@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { BarChart3, CalendarDays, FileText, Home, LogOut, Plus, Settings, Target, TrendingUp, User } from 'lucide-react';
 import { useEffect, useRef } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { CATEGORY_LABELS, type ActivityCategory } from '@flagtrack/shared';
 import { IS_LOCAL, api } from '../lib/api';
 import { serverNow, useServerTime } from '../lib/hooks';
 import { localNotify } from '../lib/push';
+import { ErrorBoundary } from './ErrorBoundary';
 import { useToast } from './Toast';
 import { StreakFlame } from './sport';
 import { cx } from './ui';
@@ -68,6 +69,7 @@ export default function Layout() {
   const streak = s.data?.streak;
   const g = s.data?.gamification;
   const nav = useNavigate();
+  const loc = useLocation();
 
   const logout = async () => {
     await api('/auth/logout', { method: 'POST' }).catch(() => {});
@@ -124,7 +126,9 @@ export default function Layout() {
         </header>
 
         <main className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:px-8 md:pb-12 md:pt-8">
-          <Outlet />
+          <ErrorBoundary resetKey={loc.pathname}>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
 
