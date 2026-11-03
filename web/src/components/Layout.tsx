@@ -1,4 +1,4 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BarChart3, CalendarDays, FileText, Home, LogOut, Plus, Settings, Target, TrendingUp, User } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -162,6 +162,12 @@ function TabLink({ to, label, icon: Icon, end }: (typeof NAV)[number]) {
 /** Offline mode: warns when the device clock was moved back or a save failed. */
 function LocalWatcher() {
   const toast = useToast();
+  const qc = useQueryClient();
+  useEffect(() => {
+    const onExternal = () => qc.invalidateQueries();
+    window.addEventListener('ft:external-change', onExternal);
+    return () => window.removeEventListener('ft:external-change', onExternal);
+  }, [qc]);
   useEffect(() => {
     const onSaveError = () => toast.error('Não foi possível salvar no aparelho. Verifique o espaço livre e faça um backup em Configurações.');
     window.addEventListener('ft:save-error', onSaveError);

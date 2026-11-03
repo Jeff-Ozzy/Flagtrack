@@ -49,7 +49,12 @@ Diferenças do modo local:
 - **Backup:** Configurações → *Fazer backup* / *Restaurar* (arquivo JSON). Desinstalar o app ou
   limpar os dados do site apaga os registros — faça backups. O app pede armazenamento persistente.
 - Relatórios PDF/Excel são gerados no próprio aparelho.
+- Duas instâncias abertas (app instalado e aba do Chrome) se sincronizam: quando uma salva, a outra
+  recarrega os dados antes de gravar, evitando que uma apague o que a outra registrou.
 - Os testes de integração rodam também contra o banco em memória (`npm run test:memory -w server`).
+- `web/test/offline.test.ts` (20 testes) roda o backend offline completo com IndexedDB simulado:
+  todos os fluxos de escrita, persistência após reabrir o app, relógio monotônico, backup/restauração,
+  foto, relatórios, sincronização entre instâncias e o formato das respostas (sem objetos `Date`).
 
 ## Variáveis de ambiente (`server/.env`, ver `server/.env.example`)
 

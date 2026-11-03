@@ -28,6 +28,7 @@ jobs:
       - run: npm ci
       - run: npm run test -w shared
       - run: npm run test:memory -w server
+      - run: npm run test -w web
       - run: npm run build:offline -w web
         env:
           VITE_BASE: /${{ github.event.repository.name }}/

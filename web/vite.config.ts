@@ -13,7 +13,7 @@ const local = (f: string) => normalizePath(resolve(here, 'src/local', f));
  * Offline build: the API route modules from server/ are bundled into the app,
  * with their Node-only dependencies swapped for browser equivalents.
  */
-function offlineBackend(): Plugin {
+export function offlineBackend({ browserLibs = true } = {}): Plugin {
   const swaps: Record<string, string> = {
     [resolve(serverSrc, 'db.ts')]: local('server-db.ts'),
     [resolve(serverSrc, 'auth.ts')]: local('server-auth.ts'),
@@ -21,8 +21,13 @@ function offlineBackend(): Plugin {
   const bare: Record<string, string> = {
     express: local('express-shim.ts'),
     'node:crypto': local('crypto-shim.ts'),
-    pdfkit: normalizePath(resolve(here, '../node_modules/pdfkit/js/pdfkit.standalone.js')),
-    exceljs: normalizePath(resolve(here, '../node_modules/exceljs/dist/exceljs.min.js')),
+    // Tests run in Node and use the regular builds of these libraries.
+    ...(browserLibs
+      ? {
+          pdfkit: normalizePath(resolve(here, '../node_modules/pdfkit/js/pdfkit.standalone.js')),
+          exceljs: normalizePath(resolve(here, '../node_modules/exceljs/dist/exceljs.min.js')),
+        }
+      : {}),
   };
   return {
     name: 'flagtrack-offline-backend',

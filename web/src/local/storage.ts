@@ -46,6 +46,14 @@ async function write(s: Snapshot) {
   });
 }
 
+/** Notifies other open instances of the app (same device) that data changed. */
+const channel = typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel('flagtrack-local') : null;
+export function onExternalSave(fn: () => void) {
+  channel?.addEventListener('message', (e) => {
+    if ((e as MessageEvent).data?.type === 'saved') fn();
+  });
+}
+
 let pending: (() => Snapshot) | null = null;
 let inFlight: Promise<void> | null = null;
 
@@ -61,10 +69,11 @@ async function flushLoop() {
       const get = pending;
       pending = null;
       await write(get());
+      channel?.postMessage({ type: 'saved' });
     }
   } catch (e) {
     console.error('[FlagTrack] Falha ao salvar no aparelho', e);
-    window.dispatchEvent(new CustomEvent('ft:save-error'));
+    if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('ft:save-error'));
   } finally {
     inFlight = null;
   }
