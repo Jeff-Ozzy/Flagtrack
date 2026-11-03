@@ -1,9 +1,11 @@
 import { api } from './api';
+import { IS_NATIVE } from './native';
 
 export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
 
 export async function registerSW() {
-  if (!('serviceWorker' in navigator)) return null;
+  // Inside the APK the files are already on the device: no service worker needed.
+  if (!('serviceWorker' in navigator) || IS_NATIVE) return null;
   try {
     return await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL });
   } catch {
@@ -49,6 +51,7 @@ export async function currentPushState(): Promise<'unsupported' | 'denied' | 'on
 
 /** Local notification while the app is open (does not require push). */
 export async function localNotify(title: string, body: string, url: string) {
+  if (IS_NATIVE) return; // the APK schedules real Android notifications instead
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   const reg = await navigator.serviceWorker?.getRegistration();
   if (reg) reg.showNotification(title, { body, icon: '/icon-192.png', tag: url, data: { url } });

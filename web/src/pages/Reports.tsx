@@ -5,6 +5,7 @@ import { REPORT_MODULES, addDays, formatDateBR, weekStart } from '@flagtrack/sha
 import { useToast } from '../components/Toast';
 import { Button, Card, Chips, Input, PageHeader, Segmented } from '../components/ui';
 import { download } from '../lib/api';
+import { IS_NATIVE } from '../lib/native';
 import { useServerTime } from '../lib/hooks';
 
 type Preset = 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth' | 'custom';
@@ -68,7 +69,7 @@ export default function Reports() {
         <div className="mb-5 flex animate-rise flex-col items-center text-center">
           <CheckCircle2 className="h-16 w-16 text-accent" />
           <h2 className="mt-2 text-3xl font-bold">Relatório gerado!</h2>
-          <p className="text-sm text-muted">{done.name} · {(done.size / 1024).toFixed(0)} KB — o download foi iniciado.</p>
+          <p className="text-sm text-muted">{done.name} · {(done.size / 1024).toFixed(0)} KB — {IS_NATIVE ? 'escolha onde salvar ou enviar.' : 'o download foi iniciado.'}</p>
         </div>
       )}
       <div className="grid grid-cols-2 gap-3">

@@ -70,6 +70,7 @@ async function flushLoop() {
       pending = null;
       await write(get());
       channel?.postMessage({ type: 'saved' });
+      if (typeof window !== 'undefined') window.dispatchEvent(new Event('ft:saved'));
     }
   } catch (e) {
     console.error('[FlagTrack] Falha ao salvar no aparelho', e);

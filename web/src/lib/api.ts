@@ -55,8 +55,10 @@ export async function api<T = any>(path: string, opts: Opts = {}): Promise<T> {
   return data as T;
 }
 
-/** Triggers a browser download of a Blob. */
-export function saveBlob(blob: Blob, name: string) {
+/** Saves a generated file: browser download, or Android share sheet inside the APK. */
+export async function saveBlob(blob: Blob, name: string) {
+  const { IS_NATIVE, nativeSaveFile } = await import('./native');
+  if (IS_NATIVE) return nativeSaveFile(blob, name);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -76,7 +78,7 @@ export async function download(path: string) {
     const { localReport } = await import('../local/backend');
     try {
       const { blob, name } = await localReport(m[1] as 'pdf' | 'xlsx', m[2]);
-      saveBlob(blob, name);
+      await saveBlob(blob, name);
       return { name, size: blob.size };
     } catch (e) {
       throw e instanceof Error ? new ApiError(e.message, (e as { status?: number }).status ?? 500) : e;
@@ -90,7 +92,7 @@ export async function download(path: string) {
   const blob = await res.blob();
   const cd = res.headers.get('content-disposition') ?? '';
   const name = /filename="([^"]+)"/.exec(cd)?.[1] ?? 'relatorio';
-  saveBlob(blob, name);
+  await saveBlob(blob, name);
   return { name, size: blob.size };
 }
 

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">FlagTrack</string>
+    <string name="title_activity_main">FlagTrack</string>
+    <string name="package_name">com.flagtrack.app</string>
+    <string name="custom_url_scheme">com.flagtrack.app</string>
+</resources>

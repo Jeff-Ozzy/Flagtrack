@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { useToast } from '../components/Toast';
 import { Button, Card, ConfirmModal, Input, Modal, PageHeader, SectionTitle, Toggle } from '../components/ui';
 import { ApiError, IS_LOCAL, api, saveBlob } from '../lib/api';
+import { IS_NATIVE } from '../lib/native';
 import { useAction, useProfile } from '../lib/hooks';
 import { currentPushState, disablePush, enablePush } from '../lib/push';
 
@@ -130,8 +131,18 @@ export default function Settings() {
 /** Offline mode: notifications are shown while the app is open (no server to push). */
 function LocalNotifications() {
   const toast = useToast();
-  const [perm, setPerm] = useState(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
+  const [perm, setPerm] = useState<string>(IS_NATIVE ? 'prompt' : typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
+  useEffect(() => {
+    if (IS_NATIVE) import('../lib/nativeReminders').then((m) => m.notificationPermission()).then(setPerm);
+  }, []);
   const ask = async () => {
+    if (IS_NATIVE) {
+      const { requestNotificationPermission } = await import('../lib/nativeReminders');
+      const granted = await requestNotificationPermission();
+      setPerm(granted ? 'granted' : 'denied');
+      if (granted) toast.success('Notificações permitidas. Os lembretes chegam mesmo com o app fechado.');
+      return;
+    }
     const r = await Notification.requestPermission();
     setPerm(r);
     if (r === 'granted') toast.success('Notificações permitidas.');
@@ -140,11 +151,13 @@ function LocalNotifications() {
     <div className="mb-4">
       <div className="text-[15px] font-medium">Notificações do sistema</div>
       <p className="mt-0.5 text-sm text-muted">
-        No modo local não há servidor para enviar push: os lembretes aparecem enquanto o app estiver aberto ou em segundo plano recente.
+        {IS_NATIVE
+          ? 'Os lembretes das atividades planejadas (próximos 30 dias) são agendados no Android e chegam mesmo com o app fechado.'
+          : 'No modo local não há servidor para enviar push: os lembretes aparecem enquanto o app estiver aberto ou em segundo plano recente.'}
       </p>
       {perm === 'granted' ? <p className="mt-2 text-sm text-accent">Permitidas ✓</p>
         : perm === 'unsupported' ? <p className="mt-2 text-sm text-muted">Não suportado neste navegador.</p>
-        : perm === 'denied' ? <p className="mt-2 text-sm text-muted">Bloqueadas — libere nas configurações do site no Chrome.</p>
+        : perm === 'denied' ? <p className="mt-2 text-sm text-muted">{IS_NATIVE ? 'Bloqueadas — libere em Configurações do Android › Apps › FlagTrack › Notificações.' : 'Bloqueadas — libere nas configurações do site no Chrome.'}</p>
         : <Button variant="outline" size="sm" className="mt-2" onClick={ask}>Permitir notificações</Button>}
     </div>
   );
@@ -162,8 +175,8 @@ function LocalDataCard() {
   const doExport = async () => {
     const { exportBackup } = await import('../local/backend');
     const { blob, name } = await exportBackup();
-    saveBlob(blob, name);
-    toast.success(`Backup salvo: ${name}`);
+    await saveBlob(blob, name);
+    toast.success(`Backup gerado: ${name}`);
   };
   const doImport = async () => {
     if (!pending) return;

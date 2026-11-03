@@ -5,6 +5,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-do
 import { CATEGORY_LABELS, type ActivityCategory } from '@flagtrack/shared';
 import { IS_LOCAL, api } from '../lib/api';
 import { serverNow, useServerTime } from '../lib/hooks';
+import { IS_NATIVE } from '../lib/native';
 import { localNotify } from '../lib/push';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useToast } from './Toast';
@@ -146,6 +147,7 @@ export default function Layout() {
       </nav>
       <ReminderWatcher />
       {IS_LOCAL && <LocalWatcher />}
+      {IS_NATIVE && <NativeReminderSync />}
     </div>
   );
 }
@@ -186,5 +188,31 @@ function LocalWatcher() {
       clearInterval(id);
     };
   }, [toast]);
+  return null;
+}
+
+/** APK: keeps Android scheduled notifications in sync with planned activities. */
+function NativeReminderSync() {
+  const nav = useNavigate();
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let mod: typeof import('../lib/nativeReminders') | undefined;
+    let stopTap: (() => void) | undefined;
+    const sync = () => {
+      clearTimeout(timer);
+      timer = setTimeout(() => mod?.syncNativeReminders().catch((e) => console.warn('[lembretes]', e)), 1500);
+    };
+    import('../lib/nativeReminders').then((m) => {
+      mod = m;
+      stopTap = m.onNotificationTap((url) => nav(url));
+      sync();
+    });
+    window.addEventListener('ft:saved', sync);
+    return () => {
+      clearTimeout(timer);
+      stopTap?.();
+      window.removeEventListener('ft:saved', sync);
+    };
+  }, [nav]);
   return null;
 }

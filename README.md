@@ -56,6 +56,22 @@ Diferenças do modo local:
   todos os fluxos de escrita, persistência após reabrir o app, relógio monotônico, backup/restauração,
   foto, relatórios, sincronização entre instâncias e o formato das respostas (sem objetos `Date`).
 
+## APK Android (Capacitor)
+
+O mesmo build offline empacotado como app Android nativo (`web/android`), sem depender de site:
+
+```bash
+npm run build:offline
+cd web && npx cap sync android
+cd android && ./gradlew assembleDebug    # APK em app/build/outputs/apk/debug/app-debug.apk
+```
+
+Requer Android SDK (`web/android/local.properties` com `sdk.dir`) e Java 17.
+No APK: relatórios e backups são entregues pela tela de compartilhar do Android (salvar em
+Arquivos/Drive ou enviar), e os lembretes viram **notificações agendadas no Android** (próximos
+30 dias), que chegam mesmo com o app fechado. Os dados do APK são independentes dos do PWA —
+use backup/restauração para migrar.
+
 ## Variáveis de ambiente (`server/.env`, ver `server/.env.example`)
 
 | Variável | Uso |
