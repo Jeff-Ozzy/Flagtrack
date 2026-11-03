@@ -90,7 +90,8 @@ function ProfileFields({ d, set, errors, onboarding, customPos, setCustomPos }: 
         label="Fuso horário"
         value={d.timezone}
         onChange={(e) => set({ timezone: e.target.value })}
-        options={TIMEZONES.map((t) => ({ value: t, label: t.replace(/_/g, ' ') }))}
+        // The browser list omits some valid names (e.g. "UTC"); always show the saved value.
+        options={(TIMEZONES.includes(d.timezone) ? TIMEZONES : [d.timezone, ...TIMEZONES]).map((t) => ({ value: t, label: t.replace(/_/g, ' ') }))}
         error={errors.timezone}
         hint="Define o seu dia esportivo: ofensiva e janela de registro retroativo usam este fuso."
       />
