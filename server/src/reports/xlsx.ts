@@ -48,7 +48,7 @@ const colLetter = (n: number) => {
   return s;
 };
 
-export async function renderXlsx(d: ReportData): Promise<Buffer> {
+export async function renderXlsx(d: ReportData): Promise<Uint8Array> {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'FlagTrack';
   wb.created = d.generatedAt;
@@ -342,5 +342,5 @@ export async function renderXlsx(d: ReportData): Promise<Buffer> {
     );
   }
 
-  return Buffer.from(await wb.xlsx.writeBuffer());
+  return new Uint8Array(await wb.xlsx.writeBuffer());
 }

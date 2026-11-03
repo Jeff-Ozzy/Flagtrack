@@ -1,10 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { BellRing, Database, LogOut, ShieldAlert, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { BellRing, Database, Download, LogOut, ShieldAlert, Smartphone, Trash2, Upload } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useToast } from '../components/Toast';
 import { Button, Card, ConfirmModal, Input, Modal, PageHeader, SectionTitle, Toggle } from '../components/ui';
-import { ApiError, api } from '../lib/api';
+import { ApiError, IS_LOCAL, api, saveBlob } from '../lib/api';
 import { useAction, useProfile } from '../lib/hooks';
 import { currentPushState, disablePush, enablePush } from '../lib/push';
 
@@ -20,7 +20,7 @@ export default function Settings() {
   const [pwError, setPwError] = useState('');
   const [demoDel, setDemoDel] = useState(false);
 
-  useEffect(() => { currentPushState().then(setPush); }, []);
+  useEffect(() => { if (!IS_LOCAL) currentPushState().then(setPush); }, []);
 
   const setInApp = useAction((v: boolean) => {
     const p = profile.data!;
@@ -67,9 +67,14 @@ export default function Settings() {
   return (
     <>
       <PageHeader title="Configurações" back />
+      {IS_LOCAL && <LocalDataCard />}
+
       <SectionTitle>Notificações</SectionTitle>
       <Card>
         <Toggle checked={profile.data?.inAppReminders ?? true} onChange={(v) => setInApp.mutate(v)} label="Lembretes dentro do app" description="Avisos na tela enquanto o FlagTrack estiver aberto." />
+        {IS_LOCAL ? (
+          <LocalNotifications />
+        ) : (
         <Toggle
           checked={push === 'on'}
           onChange={(v) => !busy && push !== 'unsupported' && togglePush(v)}
@@ -80,6 +85,7 @@ export default function Settings() {
               : 'Receba lembretes mesmo com o app fechado. Requer permissão explícita do navegador.'
           }
         />
+        )}
         <p className="flex items-start gap-2 text-xs text-muted"><BellRing className="mt-0.5 h-3.5 w-3.5 shrink-0" />Lembretes nunca são enviados para atividades canceladas, concluídas ou excluídas. O fuso usado é {profile.data?.timezone ?? '—'} (<Link to="/profile/edit" className="text-accent">alterar</Link>).</p>
       </Card>
 
@@ -100,11 +106,11 @@ export default function Settings() {
         </div>
       </Card>
 
-      <SectionTitle>Conta</SectionTitle>
-      <Card className="space-y-3">
+      {!IS_LOCAL && <SectionTitle>Conta</SectionTitle>}
+      {!IS_LOCAL && <Card className="space-y-3">
         <Button variant="soft" className="w-full" icon={LogOut} onClick={logout}>Sair</Button>
         <Button variant="danger" className="w-full" icon={ShieldAlert} onClick={() => setDelOpen(true)}>Excluir conta e dados</Button>
-      </Card>
+      </Card>}
 
       <ConfirmModal open={demoDel} onClose={() => setDemoDel(false)} onConfirm={() => removeDemo.mutate()} title="Remover demonstração?" danger confirmLabel="Remover" loading={removeDemo.isPending}>
         Somente os registros marcados como DEMO serão excluídos. Seus dados reais são preservados e as conquistas serão recalculadas a partir deles.
@@ -117,6 +123,95 @@ export default function Settings() {
           <Button variant="danger" className="flex-1" disabled={!password} onClick={deleteAccount}>Excluir tudo</Button>
         </div>
       </Modal>
+    </>
+  );
+}
+
+/** Offline mode: notifications are shown while the app is open (no server to push). */
+function LocalNotifications() {
+  const toast = useToast();
+  const [perm, setPerm] = useState(typeof Notification === 'undefined' ? 'unsupported' : Notification.permission);
+  const ask = async () => {
+    const r = await Notification.requestPermission();
+    setPerm(r);
+    if (r === 'granted') toast.success('Notificações permitidas.');
+  };
+  return (
+    <div className="mb-4">
+      <div className="text-[15px] font-medium">Notificações do sistema</div>
+      <p className="mt-0.5 text-sm text-muted">
+        No modo local não há servidor para enviar push: os lembretes aparecem enquanto o app estiver aberto ou em segundo plano recente.
+      </p>
+      {perm === 'granted' ? <p className="mt-2 text-sm text-accent">Permitidas ✓</p>
+        : perm === 'unsupported' ? <p className="mt-2 text-sm text-muted">Não suportado neste navegador.</p>
+        : perm === 'denied' ? <p className="mt-2 text-sm text-muted">Bloqueadas — libere nas configurações do site no Chrome.</p>
+        : <Button variant="outline" size="sm" className="mt-2" onClick={ask}>Permitir notificações</Button>}
+    </div>
+  );
+}
+
+/** Offline mode: the data exists only on this phone, so backups matter. */
+function LocalDataCard() {
+  const toast = useToast();
+  const qc = useQueryClient();
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<File | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const doExport = async () => {
+    const { exportBackup } = await import('../local/backend');
+    const { blob, name } = await exportBackup();
+    saveBlob(blob, name);
+    toast.success(`Backup salvo: ${name}`);
+  };
+  const doImport = async () => {
+    if (!pending) return;
+    setBusy(true);
+    try {
+      const { importBackup } = await import('../local/backend');
+      const r = await importBackup(pending);
+      await qc.resetQueries();
+      toast.success(`Backup restaurado: ${r.activities} atividades, ${r.games} jogos, ${r.attempts} tentativas.`);
+      setPending(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Falha ao restaurar.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  const doReset = async () => {
+    setBusy(true);
+    const { resetAll } = await import('../local/backend');
+    await resetAll();
+    await qc.resetQueries();
+    setBusy(false);
+    setResetOpen(false);
+  };
+  return (
+    <>
+      <SectionTitle>Dados neste aparelho</SectionTitle>
+      <Card>
+        <div className="mb-4 flex items-start gap-3 text-sm">
+          <Smartphone className="mt-0.5 h-5 w-5 shrink-0 text-accent" />
+          <p className="text-muted">
+            Modo local: sem conta e sem internet. Tudo fica salvo só neste celular. Se o app for desinstalado ou os dados do site forem limpos,
+            os registros se perdem — faça backups com frequência.
+          </p>
+        </div>
+        <div className="grid grid-cols-2 gap-2.5">
+          <Button variant="outline" icon={Download} onClick={doExport}>Fazer backup</Button>
+          <Button variant="soft" icon={Upload} onClick={() => fileRef.current?.click()}>Restaurar</Button>
+        </div>
+        <input ref={fileRef} type="file" accept="application/json,.json" className="hidden" onChange={(e) => { setPending(e.target.files?.[0] ?? null); e.target.value = ''; }} />
+        <Button variant="danger" className="mt-3 w-full" icon={Trash2} onClick={() => setResetOpen(true)}>Apagar todos os dados</Button>
+      </Card>
+      <ConfirmModal open={!!pending} onClose={() => setPending(null)} onConfirm={doImport} title="Restaurar backup?" confirmLabel="Restaurar" loading={busy}>
+        Os dados atuais deste aparelho serão substituídos pelos do arquivo “{pending?.name}”.
+      </ConfirmModal>
+      <ConfirmModal open={resetOpen} onClose={() => setResetOpen(false)} onConfirm={doReset} title="Apagar todos os dados?" danger confirmLabel="Apagar tudo" loading={busy}>
+        Perfil, atividades, campeonatos, desafios, coletivos, peso, XP e conquistas serão apagados deste aparelho. Não é possível desfazer — faça um backup antes.
+      </ConfirmModal>
     </>
   );
 }

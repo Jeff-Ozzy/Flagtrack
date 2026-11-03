@@ -19,7 +19,7 @@ reportsRouter.get('/pdf', ah(async (req, res) => {
   const { q, data } = await load(req);
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename="${reportFileName(q.from, q.to, 'pdf')}"`);
-  renderPdf(data, res);
+  renderPdf(data, (doc) => doc.pipe(res));
 }));
 
 reportsRouter.get('/xlsx', ah(async (req, res) => {
@@ -27,5 +27,5 @@ reportsRouter.get('/xlsx', ah(async (req, res) => {
   const buf = await renderXlsx(data);
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
   res.setHeader('Content-Disposition', `attachment; filename="${reportFileName(q.from, q.to, 'xlsx')}"`);
-  res.send(buf);
+  res.send(Buffer.from(buf));
 }));

@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Camera, ChevronRight, FileText, Flame, Pencil, Ruler, Scale, Settings, Shirt, Target, Trash2, Trophy, User } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { DEFAULT_POSITIONS, DEFAULT_TIMEZONE, formatDateBR, onboardingSchema, profileSchema, weightSchema } from '@flagtrack/shared';
 import { ChartCard, Lines, NoData } from '../components/charts';
@@ -10,7 +10,7 @@ import {
   Button, Card, Chips, ConfirmModal, DemoBadge, EmptyState, ErrorState, Input, ListRow, PageHeader, PageLoading, ProgressBar,
   SectionTitle, Select, StatTile, Toggle, cx,
 } from '../components/ui';
-import { ApiError, api } from '../lib/api';
+import { ApiError, IS_LOCAL, api } from '../lib/api';
 import { useAction, useProfile, useServerTime } from '../lib/hooks';
 import type { Profile } from '../lib/types';
 
@@ -34,7 +34,24 @@ async function resizeImage(file: File): Promise<Blob> {
   return new Promise((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error('Falha ao processar a imagem.'))), 'image/jpeg', 0.85));
 }
 
-export function Avatar({ url, name, size = 96 }: { url: string | null; name: string; size?: number }) {
+/** In the offline build the photo lives in the on-device database. */
+function useResolvedPhoto(url: string | null) {
+  const [local, setLocal] = useState<string | null>(null);
+  useEffect(() => {
+    if (!IS_LOCAL || !url?.startsWith('/api/')) return;
+    let objectUrl: string | null = null;
+    import('../local/backend').then(({ localPhoto }) => localPhoto()).then((blob) => {
+      if (blob) setLocal((objectUrl = URL.createObjectURL(blob)));
+    });
+    return () => {
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [url]);
+  return IS_LOCAL && url?.startsWith('/api/') ? local : url;
+}
+
+export function Avatar({ url: rawUrl, name, size = 96 }: { url: string | null; name: string; size?: number }) {
+  const url = useResolvedPhoto(rawUrl);
   const initials = name.split(' ').filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('');
   return url ? (
     <img src={url} alt={`Foto de ${name}`} width={size} height={size} className="rounded-full object-cover ring-4 ring-accent/60" style={{ width: size, height: size }} />

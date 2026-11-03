@@ -1,5 +1,4 @@
 import PDFDocument from 'pdfkit';
-import type { Writable } from 'node:stream';
 import {
   CATEGORY_LABELS, MEASURE_LABELS, STATUS_LABELS, STAT_KEYS, STAT_LABELS, STAT_SHORT, formatDateBR, formatDuration,
   type ActivityCategory, type ActivityStatus, type MeasureType,
@@ -24,9 +23,10 @@ const fmtPct = (n: number | null | undefined) => (n == null ? '—' : `${fmtNum(
 const safe = (t: string) => t.replace(/→/g, '->').replace(/≥/g, '>=').replace(/≤/g, '<=').replace(/−/g, '-').replace(/[↑↓]/g, '');
 const fmtSigned = (n: number | null | undefined, unit = '') => (n == null ? '—' : `${n > 0 ? '+' : ''}${fmtNum(n)}${unit}`);
 
-export function renderPdf(d: ReportData, out: Writable) {
+/** `sink` receives the document before any content is written (pipe it or listen to 'data'). */
+export function renderPdf(d: ReportData, sink: (doc: PDFKit.PDFDocument) => void) {
   const doc = new PDFDocument({ size: 'A4', margin: 40, bufferPages: true, info: { Title: `Relatório do atleta — ${d.profile.fullName}`, Author: 'FlagTrack' } });
-  doc.pipe(out);
+  sink(doc);
   const W = doc.page.width - 80;
   const left = 40;
   const bottom = () => doc.page.height - 60;

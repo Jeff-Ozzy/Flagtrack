@@ -3,7 +3,7 @@ import { BarChart3, CalendarDays, FileText, Home, LogOut, Plus, Settings, Target
 import { useEffect, useRef } from 'react';
 import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { CATEGORY_LABELS, type ActivityCategory } from '@flagtrack/shared';
-import { api } from '../lib/api';
+import { IS_LOCAL, api } from '../lib/api';
 import { serverNow, useServerTime } from '../lib/hooks';
 import { localNotify } from '../lib/push';
 import { useToast } from './Toast';
@@ -102,7 +102,11 @@ export default function Layout() {
               <div className="text-right text-xs text-muted">Nível <span className="font-display text-lg font-bold text-accent">{g.level}</span><br />{g.xp} XP</div>
             </div>
           )}
-          <button onClick={logout} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted hover:bg-surface2 hover:text-text"><LogOut className="h-4 w-4" /> Sair</button>
+          {IS_LOCAL ? (
+            <p className="px-3 text-xs text-muted">Dados salvos neste aparelho</p>
+          ) : (
+            <button onClick={logout} className="flex w-full items-center gap-2 rounded-xl px-3 py-2 text-sm text-muted hover:bg-surface2 hover:text-text"><LogOut className="h-4 w-4" /> Sair</button>
+          )}
         </div>
       </aside>
 
@@ -137,6 +141,7 @@ export default function Layout() {
         </div>
       </nav>
       <ReminderWatcher />
+      {IS_LOCAL && <LocalWatcher />}
     </div>
   );
 }
@@ -148,4 +153,28 @@ function TabLink({ to, label, icon: Icon, end }: (typeof NAV)[number]) {
       {label}
     </NavLink>
   );
+}
+
+/** Offline mode: warns when the device clock was moved back or a save failed. */
+function LocalWatcher() {
+  const toast = useToast();
+  useEffect(() => {
+    const onSaveError = () => toast.error('Não foi possível salvar no aparelho. Verifique o espaço livre e faça um backup em Configurações.');
+    window.addEventListener('ft:save-error', onSaveError);
+    let warned = false;
+    const check = async () => {
+      const { clockBehindMs } = await import('../local/backend');
+      if (!warned && clockBehindMs() > 5 * 60_000) {
+        warned = true;
+        toast.info('O relógio do aparelho está atrasado em relação ao último uso. O app mantém o horário mais recente para proteger a regra de 24 horas.', undefined, 12_000);
+      }
+    };
+    check();
+    const id = setInterval(check, 60_000);
+    return () => {
+      window.removeEventListener('ft:save-error', onSaveError);
+      clearInterval(id);
+    };
+  }, [toast]);
+  return null;
 }

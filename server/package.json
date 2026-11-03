@@ -7,8 +7,9 @@
     "dev": "tsx watch src/index.ts",
     "start": "cross-env NODE_ENV=production tsx src/index.ts",
     "db:push": "node scripts/ensure-env.mjs && prisma db push --skip-generate && prisma generate",
-    "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "test": "vitest run && cross-env DB_DRIVER=memory vitest run",
+    "typecheck": "tsc --noEmit",
+    "test:memory": "cross-env DB_DRIVER=memory vitest run"
   },
   "dependencies": {
     "@flagtrack/shared": "1.0.0",

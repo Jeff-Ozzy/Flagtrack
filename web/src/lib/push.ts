@@ -5,7 +5,7 @@ export const pushSupported = () => 'serviceWorker' in navigator && 'PushManager'
 export async function registerSW() {
   if (!('serviceWorker' in navigator)) return null;
   try {
-    return await navigator.serviceWorker.register('/sw.js');
+    return await navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`, { scope: import.meta.env.BASE_URL });
   } catch {
     return null;
   }

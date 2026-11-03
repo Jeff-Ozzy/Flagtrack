@@ -24,7 +24,7 @@ registerSW(); // also in dev so push and local notifications can be tested
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
+      <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, '')}>
         <ToastProvider>
           <CelebrationProvider>
             <App />

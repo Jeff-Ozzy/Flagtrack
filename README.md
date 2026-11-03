@@ -10,7 +10,7 @@ Requisitos: Node.js 20+.
 ```bash
 npm run setup      # instala dependências e cria o banco SQLite (server/prisma/dev.db)
 npm run dev        # API em :3001 + interface em http://localhost:5173
-npm test           # testes unitários (shared) + integração (server)
+npm test           # unitários (shared) + integração (server) com SQLite e com o banco em memória
 npm run typecheck
 ```
 
@@ -23,6 +23,33 @@ npm start          # usa PORT (padrão 3001)
 
 Na primeira execução em desenvolvimento, `server/.env` recebe automaticamente
 `JWT_SECRET` e as chaves VAPID de Web Push. Em produção elas são obrigatórias.
+
+## Versão offline no celular (sem conta, sem internet)
+
+Build alternativo em que **tudo roda no aparelho**: as mesmas rotas da API (`server/src/routes`)
+são empacotadas no app e executadas sobre um banco em memória compatível com o Prisma
+(`server/src/local-db/memory.ts`), salvo no IndexedDB do navegador. Não há login nem servidor.
+
+```bash
+npm run build:offline              # gera web/dist-offline (PWA estático)
+npm run preview:offline -w web     # testa em http://localhost:4173
+```
+
+**Publicar no GitHub Pages:** crie um repositório, envie o código e em
+*Settings → Pages → Source* escolha **GitHub Actions**. O workflow
+`.github/workflows/pages.yml` roda os testes, gera o build com o caminho do repositório e publica.
+No Android, abra o endereço no Chrome uma vez e use **Adicionar à tela inicial / Instalar app**;
+depois disso o app abre e funciona sem internet. Os dados nunca saem do celular.
+
+Diferenças do modo local:
+- **Janela de 24h:** sem servidor não há relógio confiável; o app usa um relógio **monotônico**
+  (o maior horário já visto). Atrasar o relógio do celular não reabre uma janela encerrada, e o app
+  avisa quando detecta o relógio atrasado. Adiantar o relógio só prejudica o próprio atleta.
+- **Lembretes:** aparecem com o app aberto (ou em segundo plano recente); não há Web Push.
+- **Backup:** Configurações → *Fazer backup* / *Restaurar* (arquivo JSON). Desinstalar o app ou
+  limpar os dados do site apaga os registros — faça backups. O app pede armazenamento persistente.
+- Relatórios PDF/Excel são gerados no próprio aparelho.
+- Os testes de integração rodam também contra o banco em memória (`npm run test:memory -w server`).
 
 ## Variáveis de ambiente (`server/.env`, ver `server/.env.example`)
 

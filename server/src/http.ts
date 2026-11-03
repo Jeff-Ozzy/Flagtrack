@@ -1,5 +1,4 @@
 import type { NextFunction, Request, Response } from 'express';
-import { Prisma } from '@prisma/client';
 import type { ZodType, ZodTypeDef } from 'zod';
 
 export class HttpError extends Error {
@@ -28,7 +27,8 @@ export function parse<T>(schema: ZodType<T, ZodTypeDef, unknown>, data: unknown)
   return r.data;
 }
 
-export const isUniqueViolation = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === 'P2002';
+/** Works for Prisma errors and for the in-memory engine used by the offline mode. */
+export const isUniqueViolation = (e: unknown) => (e as { code?: string } | null)?.code === 'P2002';
 
 export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
   if (err instanceof HttpError) {
