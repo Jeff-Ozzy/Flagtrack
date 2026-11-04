@@ -3,12 +3,21 @@ import { DateTime } from 'luxon';
 import { useState } from 'react';
 import { REPORT_MODULES, addDays, formatDateBR, weekStart } from '@flagtrack/shared';
 import { useToast } from '../components/Toast';
-import { Button, Card, Chips, Input, PageHeader, Segmented } from '../components/ui';
+import { Button, Card, Chips, Input, PageHeader, Select } from '../components/ui';
 import { download } from '../lib/api';
 import { IS_NATIVE } from '../lib/native';
 import { useServerTime } from '../lib/hooks';
 
-type Preset = 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth' | 'custom';
+type Preset = 'day' | 'thisWeek' | 'thisMonth' | 'lastWeek' | 'lastMonth' | 'custom';
+
+const PRESETS: { value: Preset; label: string }[] = [
+  { value: 'day', label: 'Dia' },
+  { value: 'thisWeek', label: 'Semana atual' },
+  { value: 'thisMonth', label: 'Mês atual' },
+  { value: 'lastWeek', label: 'Semana anterior' },
+  { value: 'lastMonth', label: 'Mês anterior' },
+  { value: 'custom', label: 'Período personalizado' },
+];
 
 export default function Reports() {
   const time = useServerTime();
@@ -16,11 +25,13 @@ export default function Reports() {
   const today = time?.today ?? DateTime.now().toISODate()!;
   const [preset, setPreset] = useState<Preset>('thisMonth');
   const [custom, setCustom] = useState({ from: addDays(today, -29), to: today });
+  const [day, setDay] = useState(today);
   const [modules, setModules] = useState<string[]>(REPORT_MODULES.map((m) => m.code));
   const [busy, setBusy] = useState<'pdf' | 'xlsx' | null>(null);
   const [done, setDone] = useState<{ name: string; size: number } | null>(null);
   const d = DateTime.fromISO(today);
   const ranges: Record<Preset, { from: string; to: string }> = {
+    day: { from: day, to: day },
     thisWeek: { from: weekStart(today), to: addDays(weekStart(today), 6) },
     lastWeek: { from: addDays(weekStart(today), -7), to: addDays(weekStart(today), -1) },
     thisMonth: { from: d.startOf('month').toISODate()!, to: d.endOf('month').toISODate()! },
@@ -31,6 +42,7 @@ export default function Reports() {
 
   const gen = async (fmt: 'pdf' | 'xlsx') => {
     if (!modules.length) return toast.error('Selecione ao menos um módulo.');
+    if (!range.from || !range.to) return toast.error('Informe as datas do período.');
     if (range.to < range.from) return toast.error('O fim do período deve ser depois do início.');
     setBusy(fmt);
     setDone(null);
@@ -49,15 +61,15 @@ export default function Reports() {
     <>
       <PageHeader title="Relatórios" subtitle="PDF profissional ou planilha Excel com seus dados reais" />
       <Card className="mb-4">
-        <span className="label">Período</span>
-        <Segmented value={preset} onChange={setPreset} options={[{ value: 'thisWeek', label: 'Semana' }, { value: 'lastWeek', label: 'Sem. ant.' }, { value: 'thisMonth', label: 'Mês' }, { value: 'lastMonth', label: 'Mês ant.' }, { value: 'custom', label: 'Outro' }]} />
+        <Select label="Período" value={preset} onChange={(e) => setPreset(e.target.value as Preset)} options={PRESETS} />
+        {preset === 'day' && <Input label="Dia" type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} />}
         {preset === 'custom' && (
-          <div className="mt-4 grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <Input label="De" type="date" value={custom.from} onChange={(e) => setCustom((c) => ({ ...c, from: e.target.value }))} />
             <Input label="Até" type="date" value={custom.to} min={custom.from} onChange={(e) => setCustom((c) => ({ ...c, to: e.target.value }))} />
           </div>
         )}
-        <p className="mt-3 text-sm text-muted">{formatDateBR(range.from)} a {formatDateBR(range.to)}</p>
+        <p className="text-sm text-muted">{range.from === range.to ? formatDateBR(range.from) : `${formatDateBR(range.from)} a ${formatDateBR(range.to)}`}</p>
       </Card>
       <Card className="mb-5">
         <span className="label">Módulos incluídos</span>

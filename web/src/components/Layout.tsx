@@ -154,9 +154,9 @@ export default function Layout() {
 
 function TabLink({ to, label, icon: Icon, end }: (typeof NAV)[number]) {
   return (
-    <NavLink to={to} end={end} className={({ isActive }) => cx('flex flex-col items-center gap-0.5 py-2.5 text-[10.5px] font-medium', isActive ? 'text-accent' : 'text-muted')}>
-      <Icon className="h-5 w-5" />
-      {label}
+    <NavLink to={to} end={end} className={({ isActive }) => cx('flex min-w-0 flex-col items-center gap-0.5 py-2.5 text-[10.5px] font-medium', isActive ? 'text-accent' : 'text-muted')}>
+      <Icon className="h-5 w-5 shrink-0" />
+      <span className="w-full truncate px-0.5 text-center">{label}</span>
     </NavLink>
   );
 }

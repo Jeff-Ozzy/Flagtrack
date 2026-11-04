@@ -1,4 +1,4 @@
-import { ChevronLeft, Loader2, type LucideIcon } from 'lucide-react';
+import { ChevronDown, ChevronLeft, Loader2, type LucideIcon } from 'lucide-react';
 import { type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes, useEffect, useId } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 
@@ -117,11 +117,14 @@ export function Select({ label, error, hint, options, ...rest }: SelectHTMLAttri
   const id = useId();
   return (
     <Field label={label} error={error} hint={hint} htmlFor={id}>
-      <select id={id} {...rest} className={cx('input appearance-none', error && 'border-danger')}>
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>{o.label}</option>
-        ))}
-      </select>
+      <div className="relative">
+        <select id={id} {...rest} className={cx('input appearance-none pr-10', error && 'border-danger')}>
+          {options.map((o) => (
+            <option key={o.value} value={o.value}>{o.label}</option>
+          ))}
+        </select>
+        <ChevronDown aria-hidden className="pointer-events-none absolute right-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted" />
+      </div>
     </Field>
   );
 }
