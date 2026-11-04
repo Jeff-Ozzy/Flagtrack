@@ -22,7 +22,8 @@ export default {
         warn: token('warn'),
       },
       fontFamily: {
-        display: ['"Barlow Condensed"', 'system-ui', 'sans-serif'],
+        display: ['"Saira Condensed"', 'system-ui', 'sans-serif'],
+        brand: ['Saira', 'system-ui', 'sans-serif'],
         sans: ['Inter', 'system-ui', 'sans-serif'],
       },
       borderRadius: { xl: '14px', '2xl': '20px' },

@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { DEFAULT_POSITIONS, DEFAULT_TIMEZONE, formatDateBR, onboardingSchema, profileSchema, weightSchema } from '@flagtrack/shared';
 import { ChartCard, Lines, NoData } from '../components/charts';
 import { StreakFlame } from '../components/sport';
+import { BrandLockup } from '../components/Layout';
 import { useToast } from '../components/Toast';
 import {
   Button, Card, Chips, ConfirmModal, DemoBadge, EmptyState, ErrorState, Input, ListRow, PageHeader, PageLoading, ProgressBar,
@@ -169,6 +170,7 @@ export function Onboarding() {
 
   return (
     <div className="mx-auto max-w-lg px-5 py-8">
+      <BrandLockup size={56} className="mb-6" />
       <PageHeader title="Monte seu perfil" subtitle="Leva menos de um minuto. Você pode editar tudo depois." />
       <form onSubmit={submit} noValidate className="card p-5">
         <PhotoPicker preview={file ? URL.createObjectURL(file) : null} onPick={setFile} />

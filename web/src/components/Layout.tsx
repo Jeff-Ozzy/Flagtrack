@@ -27,9 +27,20 @@ const EXTRA = [
 
 export function Logo({ className }: { className?: string }) {
   return (
-    <span className={cx('font-display text-2xl font-extrabold italic tracking-tight', className)}>
-      Flag<span className="text-accent">Track</span>
+    <span className={cx('brand-logo text-2xl', className)} aria-label="FlagTrack">
+      <span className="brand-silver">FLAG</span>
+      <span className="brand-green">TRACK</span>
     </span>
+  );
+}
+
+/** Brand lockup: new belt-and-flag icon + Saira wordmark. */
+export function BrandLockup({ size = 64, className }: { size?: number; className?: string }) {
+  return (
+    <div className={cx('flex items-center gap-3', className)}>
+      <img src={`${import.meta.env.BASE_URL}icon-192.png`} alt="" width={size} height={size} className="drop-shadow-lg" style={{ width: size, height: size }} />
+      <Logo className="text-[clamp(1.6rem,8vw,2.4rem)]" />
+    </div>
   );
 }
 

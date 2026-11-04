@@ -45,7 +45,8 @@ export function AuthPage({ mode }: { mode: 'login' | 'register' }) {
       <div aria-hidden className="pointer-events-none absolute -top-40 left-1/2 h-96 w-[42rem] -translate-x-1/2 rounded-full bg-accent/20 blur-3xl" />
       <div className="relative w-full max-w-sm">
         <div className="mb-10 text-center">
-          <Logo className="text-6xl" />
+          <img src={`${import.meta.env.BASE_URL}icon-512.png`} alt="" width={120} height={120} className="mx-auto mb-4 h-[120px] w-[120px] drop-shadow-2xl" />
+          <Logo className="text-[clamp(2.6rem,13vw,3.75rem)]" />
           <p className="mt-2 font-display text-xl font-semibold uppercase tracking-[.2em] text-text/80">Analise. Evolua. Conquiste.</p>
         </div>
         <form onSubmit={submit} noValidate className="card p-6">
