@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { STAT_KEYS, STAT_LABELS, type StatKey } from '@flagtrack/shared';
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from 'recharts';
@@ -21,9 +22,9 @@ const tooltipStyle = {
 
 export function ChartCard({ title, subtitle, children, right }: { title: string; subtitle?: ReactNode; children: ReactNode; right?: ReactNode }) {
   return (
-    <div className="card p-4">
-      <div className="mb-3 flex items-start justify-between gap-2">
-        <div>
+    <div className="card min-w-0 p-4">
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1 basis-[11rem]">
           <h3 className="text-lg font-bold">{title}</h3>
           {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
         </div>
@@ -94,4 +95,40 @@ export function Lines({ data, x, series, height = 220, format, area, domain }: {
 
 export function NoData({ children }: { children: ReactNode }) {
   return <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-line px-6 text-center text-sm text-muted">{children}</div>;
+}
+
+// ---------- stat indicator picker (all 7 game indicators) ----------
+export const STAT_COLORS: Record<StatKey, string> = {
+  tdPass: 'rgb(47 124 246)',
+  tdRun: 'rgb(46 213 101)',
+  tdRec: 'rgb(56 189 248)',
+  sacks: 'rgb(255 138 30)',
+  deflections: 'rgb(167 139 250)',
+  interceptions: 'rgb(250 204 21)',
+  pickSix: 'rgb(244 114 182)',
+};
+
+export type StatChoice = StatKey | 'tds' | 'all';
+const TD_KEYS: StatKey[] = ['tdPass', 'tdRun', 'tdRec'];
+
+export const choiceKeys = (c: StatChoice): StatKey[] => (c === 'all' ? [...STAT_KEYS] : c === 'tds' ? TD_KEYS : [c]);
+export const choiceLabel = (c: StatChoice) => (c === 'all' ? 'Todos os indicadores' : c === 'tds' ? 'Todos os TDs' : STAT_LABELS[c]);
+
+/** Bar series for the chosen indicators, each with its own color. */
+export const choiceSeries = (c: StatChoice) => choiceKeys(c).map((k) => ({ key: k, label: STAT_LABELS[k], color: STAT_COLORS[k] }));
+
+/** Dropdown with every game indicator; `groups` adds "Todos" options for multi-series charts. */
+export function StatSelect<T extends StatChoice>({ value, onChange, groups = false }: { value: T; onChange: (v: T) => void; groups?: boolean }) {
+  return (
+    <select
+      aria-label="Indicador"
+      className="max-w-[11rem] rounded-lg border border-accent/50 bg-surface2 px-2 py-1.5 text-sm text-text focus:border-accent focus:outline-none"
+      value={value}
+      onChange={(e) => onChange(e.target.value as T)}
+    >
+      {groups && <option value="all">Todos os indicadores</option>}
+      {groups && <option value="tds">Todos os TDs</option>}
+      {STAT_KEYS.map((k) => <option key={k} value={k}>{STAT_LABELS[k]}</option>)}
+    </select>
+  );
 }

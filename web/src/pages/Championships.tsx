@@ -6,7 +6,7 @@ import {
   CHAMPIONSHIP_STATUSES, CHAMPIONSHIP_STATUS_LABELS, EVENT_STATUSES, GAME_RESULTS, GAME_RESULT_LABELS, GAME_STATUS_LABELS, STAT_KEYS,
   STAT_LABELS, STAT_SHORT, championshipSchema, formatDateBR, gameSchema, stageSchema, type StatKey,
 } from '@flagtrack/shared';
-import { Bars, ChartCard, Lines, NoData } from '../components/charts';
+import { Bars, ChartCard, Lines, NoData, StatSelect, choiceLabel, choiceSeries, type StatChoice } from '../components/charts';
 import { StatsEditor, StatsGrid, StatsTable, StatusPill, emptyDraft, parseDraft, type StatsDraft } from '../components/sport';
 import {
   Badge, Button, Card, ConfirmModal, DemoBadge, EmptyState, ErrorState, Input, LinkButton, PageHeader, PageLoading, SectionTitle,
@@ -19,7 +19,6 @@ import { AnalyticsTabs } from './Analytics';
 
 const flat = (e: { flatten: () => { fieldErrors: Record<string, string[] | undefined> } }) =>
   Object.fromEntries(Object.entries(e.flatten().fieldErrors).map(([k, v]) => [k, v?.[0] ?? '']));
-const statOptions = STAT_KEYS.map((k) => ({ value: k, label: STAT_LABELS[k] }));
 
 // ---------------- List ----------------
 export function ChampionshipsList() {
@@ -67,7 +66,7 @@ export function ChampionshipsList() {
 /** Compares per-game averages across championships or seasons (archived included). */
 function ChampionshipCompare() {
   const [by, setBy] = useState<'championships' | 'seasons'>('seasons');
-  const [stat, setStat] = useState<StatKey>('tdPass');
+  const [stat, setStat] = useState<StatChoice>('tdPass');
   const q = useQuery({ queryKey: ['championships', 'compare'], queryFn: () => api<{ championships: any[]; seasons: any[] }>('/championships/compare') });
   if (!q.data) return null;
   const rows = (by === 'seasons' ? q.data.seasons : q.data.championships).filter((r) => r.counts.withStats > 0);
@@ -80,8 +79,8 @@ function ChampionshipCompare() {
         <NoData>São necessários ao menos 2 {by === 'seasons' ? 'temporadas' : 'campeonatos'} com jogos registrados para comparar. Campeonatos arquivados também entram.</NoData>
       ) : (
         <>
-          <ChartCard title={`${STAT_LABELS[stat]} — média por jogo`} right={<select aria-label="Indicador" className="rounded-lg bg-surface2 px-2 py-1 text-sm" value={stat} onChange={(e) => setStat(e.target.value as StatKey)}>{statOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>}>
-            <Bars data={rows.map((r) => ({ x: by === 'seasons' ? r.season : r.name.slice(0, 14), v: r.averages[stat] ?? 0 }))} x="x" series={[{ key: 'v', label: 'Média por jogo', color: 'rgb(46 213 101)' }]} height={190} />
+          <ChartCard title={`${choiceLabel(stat)} — média por jogo`} right={<StatSelect value={stat} onChange={setStat} groups />}>
+            <Bars data={rows.map((r) => ({ x: by === 'seasons' ? r.season : r.name.slice(0, 14), ...Object.fromEntries(STAT_KEYS.map((k) => [k, r.averages[k] ?? 0])) }))} x="x" series={choiceSeries(stat)} height={220} />
           </ChartCard>
           <div className="card mt-3 overflow-x-auto p-0">
             <table className="w-full min-w-[620px] text-sm">
@@ -178,6 +177,8 @@ export function ChampionshipDetail() {
   const { id } = useParams();
   const nav = useNavigate();
   const [stat, setStat] = useState<StatKey>('tdPass');
+  const [gameChoice, setGameChoice] = useState<StatChoice>('tds');
+  const [stageChoice, setStageChoice] = useState<StatChoice>('tds');
   const [stageFilter, setStageFilter] = useState('');
   const [del, setDel] = useState(false);
   const q = useQuery({ queryKey: ['championship', id], queryFn: () => api(`/championships/${id}`) });
@@ -187,7 +188,7 @@ export function ChampionshipDetail() {
   if (q.isError) return <ErrorState error={q.error} retry={q.refetch} />;
   const { championship: c, summary, byStage } = q.data as { championship: any; summary: GamesSummary; byStage: any[] };
   const games: any[] = c.games.filter((g: any) => !stageFilter || g.stageId === stageFilter);
-  const series = summary.series.map((g, i) => ({ x: `J${i + 1}`, Passados: g.stats?.tdPass ?? null, Corridos: g.stats?.tdRun ?? null, v: g.stats?.[stat] ?? null }));
+  const series = summary.series.map((g, i) => ({ x: `J${i + 1}`, ...Object.fromEntries(STAT_KEYS.map((k) => [k, g.stats?.[k] ?? null])), v: g.stats?.[stat] ?? null }));
 
   return (
     <>
@@ -214,12 +215,16 @@ export function ChampionshipDetail() {
       </p>
 
       <SectionTitle>Evolução por jogo</SectionTitle>
-      <ChartCard title="TDs por jogo" subtitle={`Somente jogos com estatísticas informadas · ${summary.series.map((g, i) => `J${i + 1} ${g.opponent}`).join(' · ')}`}>
-        {series.length ? <Bars data={series} x="x" series={[{ key: 'Passados', label: 'Passados' }, { key: 'Corridos', label: 'Corridos' }]} /> : <NoData>Registre estatísticas nos jogos para ver a evolução.</NoData>}
+      <ChartCard
+        title={`${choiceLabel(gameChoice)} por jogo`}
+        subtitle={`Somente jogos com estatísticas informadas · ${summary.series.map((g, i) => `J${i + 1} ${g.opponent}`).join(' · ')}`}
+        right={<StatSelect value={gameChoice} onChange={setGameChoice} groups />}
+      >
+        {series.length ? <Bars data={series} x="x" series={choiceSeries(gameChoice)} height={gameChoice === 'all' ? 260 : 220} /> : <NoData>Registre estatísticas nos jogos para ver a evolução.</NoData>}
       </ChartCard>
       {series.length > 1 && (
         <div className="mt-3">
-          <ChartCard title={STAT_LABELS[stat]} subtitle="Evolução jogo a jogo" right={<select aria-label="Indicador" className="rounded-lg bg-surface2 px-2 py-1 text-sm" value={stat} onChange={(e) => setStat(e.target.value as StatKey)}>{statOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>}>
+          <ChartCard title={STAT_LABELS[stat]} subtitle="Evolução jogo a jogo" right={<StatSelect value={stat} onChange={setStat} />}>
             <Lines area data={series} x="x" series={[{ key: 'v', label: STAT_LABELS[stat] }]} height={180} />
           </ChartCard>
         </div>
@@ -231,8 +236,8 @@ export function ChampionshipDetail() {
       {byStage.length > 0 && (
         <>
           <SectionTitle>Evolução por etapa</SectionTitle>
-          <ChartCard title={`Média de ${STAT_LABELS[stat]} por etapa`}>
-            {byStage.some((s) => s.withStats) ? <Bars data={byStage.map((s) => ({ x: s.stage.name, v: s.averages[stat] ?? 0 }))} x="x" series={[{ key: 'v', label: 'Média', color: 'rgb(46 213 101)' }]} height={180} /> : <NoData>Sem estatísticas nas etapas ainda.</NoData>}
+          <ChartCard title={`Média por etapa · ${choiceLabel(stageChoice)}`} subtitle="Média por jogo em cada etapa" right={<StatSelect value={stageChoice} onChange={setStageChoice} groups />}>
+            {byStage.some((s) => s.withStats) ? <Bars data={byStage.map((s) => ({ x: s.stage.name, ...Object.fromEntries(STAT_KEYS.map((k) => [k, s.averages[k] ?? 0])) }))} x="x" series={choiceSeries(stageChoice)} height={220} /> : <NoData>Sem estatísticas nas etapas ainda.</NoData>}
           </ChartCard>
           {byStage.filter((s) => s.withStats).length > 0 && (
             <div className="card mt-3 overflow-x-auto p-0">
