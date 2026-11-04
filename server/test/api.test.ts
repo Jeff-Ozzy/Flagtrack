@@ -118,6 +118,7 @@ describe('ofensiva, XP e idempotência', () => {
     await agent.post('/api/activities').send({ ...activity({ date: '2026-11-02' }), markCompleted: true }).expect(201);
     const dash = await agent.get('/api/dashboard').expect(200);
     expect(dash.body.streak.current).toBe(2);
+    expect(dash.body.todayActivities[0].completion).toBeTruthy(); // painel oferece "Concluir"
     expect(dash.body.streak.weekActiveDays).toBe(2);
   });
 

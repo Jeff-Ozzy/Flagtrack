@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { ACTIVITY_CATEGORIES, addDays, goalSchema, localDate, summarizeChallenge, weekStart, type MeasureType } from '@flagtrack/shared';
+import { ACTIVITY_CATEGORIES, addDays, checkCompletion, goalSchema, localDate, summarizeChallenge, weekStart, type MeasureType } from '@flagtrack/shared';
 import { userTz } from '../auth';
 import { clock, prisma } from '../db';
 import { HttpError, ah, notFound, parse } from '../http';
@@ -59,7 +59,8 @@ insightsRouter.get('/dashboard', ah(async (req, res) => {
     now: now.toISOString(),
     today,
     streak,
-    todayActivities: todayActs,
+    // Same `completion` info as /activities, so the dashboard can offer "Concluir".
+    todayActivities: todayActs.map((a) => ({ ...a, completion: checkCompletion({ date: a.date, startTime: a.startTime, tz, now }) })),
     nextActivity: next,
     yesterdayPending,
     week: { ...week, activities: undefined },

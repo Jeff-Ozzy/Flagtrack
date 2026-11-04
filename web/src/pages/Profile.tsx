@@ -261,7 +261,7 @@ export function ProfilePage() {
         <Avatar url={prof.photoUrl} name={prof.fullName} size={112} />
         <h2 className="mt-3 text-3xl font-bold">{prof.fullName}</h2>
         <p className="text-sm text-muted">{prof.jerseyNumber != null ? `#${prof.jerseyNumber} | ` : ''}{prof.positions.join(' / ')}</p>
-        <p className="mt-1 text-xs text-muted">Atleta desde {formatDateBR(prof.createdAt.slice(0, 10))}</p>
+        <p className="mt-1 text-xs text-muted">Atleta desde {new Date(prof.createdAt).toLocaleDateString('pt-BR', { timeZone: prof.timezone })}</p>
       </div>
 
       <Card className="mt-5 divide-y divide-line/50 p-0">
