@@ -21,7 +21,10 @@ public class MainActivity extends BridgeActivity {
         content.setBackgroundColor(Color.parseColor("#0B0D10"));
         ViewCompat.setOnApplyWindowInsetsListener(content, (v, insets) -> {
             Insets bars = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
-            v.setPadding(bars.left, bars.top, bars.right, bars.bottom);
+            // Also reserve the keyboard's space so the WebView shrinks and the
+            // focused field stays visible above it while typing.
+            Insets ime = insets.getInsets(WindowInsetsCompat.Type.ime());
+            v.setPadding(bars.left, bars.top, bars.right, Math.max(bars.bottom, ime.bottom));
             return WindowInsetsCompat.CONSUMED;
         });
     }

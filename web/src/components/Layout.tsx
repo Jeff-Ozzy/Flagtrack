@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { BarChart3, CalendarDays, FileText, Home, LogOut, Plus, Settings, Target, TrendingUp, User } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { CATEGORY_LABELS, type ActivityCategory } from '@flagtrack/shared';
 import { IS_LOCAL, api } from '../lib/api';
@@ -75,6 +75,46 @@ function ReminderWatcher() {
   return null;
 }
 
+/**
+ * On-screen keyboard handling: keeps the focused field visible above the
+ * keyboard and reports whether the keyboard is open (to hide the tab bar).
+ */
+function useKeyboard() {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    let maxH = Math.max(window.innerHeight, vv?.height ?? 0);
+    const isField = (el: Element | null) => !!el && (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !['checkbox', 'radio', 'button', 'submit', 'file', 'range'].includes((el as HTMLInputElement).type)) || (el as HTMLElement).isContentEditable);
+    const check = () => {
+      const h = vv?.height ?? window.innerHeight;
+      maxH = Math.max(maxH, h);
+      setOpen(h < maxH * 0.8 && isField(document.activeElement));
+    };
+    const reveal = () => {
+      const el = document.activeElement as HTMLElement | null;
+      if (isField(el)) el!.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    };
+    const onFocus = (e: FocusEvent) => {
+      if (!isField(e.target as Element)) return;
+      // after the keyboard animation has resized the viewport
+      setTimeout(reveal, 350);
+      setTimeout(check, 400);
+    };
+    const onResize = () => {
+      check();
+      reveal();
+    };
+    document.addEventListener('focusin', onFocus);
+    document.addEventListener('focusout', () => setTimeout(check, 150));
+    (vv ?? window).addEventListener('resize', onResize);
+    return () => {
+      document.removeEventListener('focusin', onFocus);
+      (vv ?? window).removeEventListener('resize', onResize);
+    };
+  }, []);
+  return open;
+}
+
 export default function Layout() {
   useServerTime();
   const s = useSummary();
@@ -82,6 +122,7 @@ export default function Layout() {
   const g = s.data?.gamification;
   const nav = useNavigate();
   const loc = useLocation();
+  const keyboardOpen = useKeyboard();
 
   const logout = async () => {
     await api('/auth/logout', { method: 'POST' }).catch(() => {});
@@ -145,7 +186,7 @@ export default function Layout() {
       </div>
 
       {/* Mobile bottom navigation with central "+" */}
-      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line/60 bg-surface/95 backdrop-blur md:hidden safe-bottom" aria-label="Navegação principal">
+      <nav className={cx('fixed inset-x-0 bottom-0 z-40 border-t border-line/60 bg-surface/95 backdrop-blur md:hidden safe-bottom', keyboardOpen && 'hidden')} aria-label="Navegação principal">
         <div className="mx-auto grid max-w-lg grid-cols-6 items-end px-1">
           {NAV.slice(0, 2).map((n) => <TabLink key={n.to} {...n} />)}
           <div className="flex justify-center">
