@@ -2,7 +2,7 @@ import { Bell, CalendarClock, Check, Circle, Clock, Flame, MapPin, Minus, Plus, 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  CATEGORY_COLORS, CATEGORY_LABELS, STATUS_LABELS, STAT_KEYS, STAT_LABELS, addDays, formatRemaining, statsSchema,
+  CATEGORY_COLORS, CATEGORY_LABELS, STATUS_LABELS, STAT_KEYS, STAT_LABELS, addDays, formatRemaining, statsSchema, weekStart,
   type ActivityCategory, type StatKey,
 } from '@flagtrack/shared';
 import { api } from '../lib/api';
@@ -23,18 +23,31 @@ export function StreakFlame({ count, active, size = 'md' }: { count: number; act
   );
 }
 
-/** Last N days strip: active days, today and days without record. */
-export function StreakDays({ activeDates, today, days = 14 }: { activeDates: string[]; today: string; days?: number }) {
+/** Current week (Mon–Sun) strip: active days, today, and upcoming days dimmed. */
+export function StreakDays({ activeDates, today }: { activeDates: string[]; today: string }) {
   const set = new Set(activeDates);
-  const list = Array.from({ length: days }, (_, i) => addDays(today, i - days + 1));
+  const start = weekStart(today);
+  const list = Array.from({ length: 7 }, (_, i) => addDays(start, i));
   return (
-    <div className="grid gap-1.5" style={{ gridTemplateColumns: `repeat(${days > 7 ? 7 : days}, minmax(0,1fr))` }}>
-      {list.map((d) => {
+    <div className="grid grid-cols-7 gap-1.5">
+      {list.map((d, i) => {
         const on = set.has(d);
         const isToday = d === today;
+        const future = d > today;
         return (
-          <div key={d} title={d} className={cx('flex aspect-square items-center justify-center rounded-lg text-[11px] font-bold', on ? 'bg-flame/90 text-black' : 'bg-surface2 text-muted', isToday && !on && 'ring-2 ring-flame/60')}>
-            {on ? <Flame className="h-3.5 w-3.5" /> : Number(d.slice(8))}
+          <div key={d} className="flex flex-col items-center gap-1">
+            <span className={cx('text-[10px] font-semibold uppercase', isToday ? 'text-flame' : 'text-muted')}>{WEEKDAYS_SHORT[i]}</span>
+            <div
+              title={d}
+              className={cx(
+                'flex aspect-square w-full items-center justify-center rounded-lg text-[11px] font-bold',
+                on ? 'bg-flame/90 text-black' : 'bg-surface2 text-muted',
+                isToday && !on && 'ring-2 ring-flame/60',
+                future && 'opacity-40',
+              )}
+            >
+              {on ? <Flame className="h-3.5 w-3.5" /> : Number(d.slice(8))}
+            </div>
           </div>
         );
       })}
