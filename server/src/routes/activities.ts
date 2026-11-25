@@ -155,7 +155,10 @@ activitiesRouter.get('/:id', ah(async (req, res) => {
       for (const h of g.summary.history) if (h.activityId === a.id && h.prs.length) prs.set(h.id, h.prs);
     }
   }
-  res.json({ ...withCompletion(a, tz, clock.now()), exercises: a.exercises.map((e) => ({ ...e, prs: prs.get(e.id) ?? [] })) });
+  const seriesNext = a.seriesId
+    ? await prisma.activity.count({ where: { userId: req.userId, seriesId: a.seriesId, id: { not: a.id }, status: 'PLANNED', date: { gte: a.date } } })
+    : 0;
+  res.json({ ...withCompletion(a, tz, clock.now()), seriesNext, exercises: a.exercises.map((e) => ({ ...e, prs: prs.get(e.id) ?? [] })) });
 }));
 
 const createExtras = z.object({
@@ -241,7 +244,8 @@ activitiesRouter.put('/:id', ah(async (req, res) => {
   const derived = derive(body, tz);
   const { recurrence: _r, clientId: _c, exercises, ...data } = body;
   // Only touch the checklist when the client sent it (older clients omit the field).
-  if (Array.isArray(req.body?.exercises)) await syncExercises(current.id, req.userId, exercises, now);
+  const withExercises = Array.isArray(req.body?.exercises);
+  if (withExercises) await syncExercises(current.id, req.userId, exercises, now);
   const updated = await prisma.activity.update({
     where: { id: current.id },
     data: {
@@ -250,8 +254,27 @@ activitiesRouter.put('/:id', ah(async (req, res) => {
       reminderSentAt: +(derived.reminderAt ?? 0) === +(current.reminderAt ?? 0) ? current.reminderSentAt : null,
     },
   });
+
+  // "Edit all occurrences": same changes on the following planned activities of the series.
+  // Each one keeps its own date (and its own checklist progress).
+  let series = 0;
+  if (req.query.scope === 'series' && current.seriesId) {
+    const others = await prisma.activity.findMany({
+      where: { userId: req.userId, seriesId: current.seriesId, id: { not: current.id }, status: 'PLANNED', date: { gte: current.date } },
+    });
+    const { date: _d, ...shared } = data;
+    for (const o of others) {
+      const d = derive({ ...body, date: o.date }, tz);
+      await prisma.activity.update({
+        where: { id: o.id },
+        data: { ...shared, ...d, reminderSentAt: +(d.reminderAt ?? 0) === +(o.reminderAt ?? 0) ? o.reminderSentAt : null },
+      });
+      if (withExercises) await syncExercisesByName(o.id, req.userId, exercises, now);
+    }
+    series = others.length;
+  }
   const rewards = await syncRewards(req.userId);
-  res.json({ activity: withCompletion(updated, tz, now), rewards });
+  res.json({ activity: withCompletion(updated, tz, now), rewards, updated: 1 + series });
 }));
 
 activitiesRouter.post('/:id/status', ah(async (req, res) => {
@@ -317,6 +340,18 @@ async function syncExercises(activityId: string, userId: string, list: ExerciseI
       await prisma.activityExercise.create({ data: { ...values, userId, activityId, done: e.done, doneAt: e.done ? now : null } });
     }
   }
+}
+
+/** Applies a checklist edited in another occurrence: items are matched by name, keeping their own done state. */
+async function syncExercisesByName(activityId: string, userId: string, list: ExerciseInput[], now: Date) {
+  const existing = await prisma.activityExercise.findMany({ where: { activityId, userId }, orderBy: { order: 'asc' } });
+  const used = new Set<string>();
+  const mapped = list.map((e) => {
+    const match = existing.find((x) => !used.has(x.id) && x.nameKey === exerciseKey(e.name));
+    if (match) used.add(match.id);
+    return { ...e, id: match?.id ?? null, done: match?.done ?? false };
+  });
+  await syncExercises(activityId, userId, mapped, now);
 }
 
 /** Check off an exercise and record the values actually done (load, reps…). */

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Bell, CalendarDays, ListChecks, MapPin, Repeat } from 'lucide-react';
+import { Bell, CalendarDays, ListChecks, MapPin, Repeat, Repeat2 } from 'lucide-react';
 import { DateTime } from 'luxon';
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -31,6 +31,7 @@ export default function ActivityForm() {
 function Form({ existing }: { existing?: Activity }) {
   const nav = useNavigate();
   const [params] = useSearchParams();
+  const seriesEdit = !!existing?.seriesId && params.get('scope') === 'series';
   const time = useServerTime();
   const today = time?.today ?? DateTime.now().toISODate()!;
   const tz = time?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -63,9 +64,9 @@ function Form({ existing }: { existing?: Activity }) {
   const isPast = f.date <= today;
 
   const save = useAction(
-    (body: Record<string, unknown>) => (existing ? api(`/activities/${existing.id}`, { method: 'PUT', body }) : api('/activities', { body })),
+    (body: Record<string, unknown>) => (existing ? api(`/activities/${existing.id}${seriesEdit ? '?scope=series' : ''}`, { method: 'PUT', body }) : api('/activities', { body })),
     {
-      success: (r: any) => (existing ? 'Atividade atualizada.' : r.duplicate ? 'Esta atividade já tinha sido salva.' : r.created > 1 ? `${r.created} atividades criadas.` : markCompleted ? 'Atividade registrada como concluída!' : 'Atividade salva.'),
+      success: (r: any) => (existing ? (r.updated > 1 ? `${r.updated} atividades da repetição atualizadas.` : 'Atividade atualizada.') : r.duplicate ? 'Esta atividade já tinha sido salva.' : r.created > 1 ? `${r.created} atividades criadas.` : markCompleted ? 'Atividade registrada como concluída!' : 'Atividade salva.'),
       onSuccess: (r: any) => nav(`/activities/${r.activity.id}`, { replace: true }),
       onError: (e) => e instanceof ApiError && setErrors(e.fieldErrors),
     },
@@ -98,8 +99,18 @@ function Form({ existing }: { existing?: Activity }) {
   const main: ActivityCategory[] = ['TECNICO', 'FISICO', 'ACADEMIA', 'CORRIDA', 'JOGO', 'COLETIVO', 'DESAFIO', 'MOBILIDADE', 'CROSSFIT', 'CAMPEONATO', 'DESCANSO', 'OUTRA'];
   return (
     <>
-      <PageHeader title={existing ? 'Editar atividade' : 'Registrar atividade'} back />
+      <PageHeader title={existing ? (seriesEdit ? 'Editar todas as ocorrências' : 'Editar atividade') : 'Registrar atividade'} back />
       <form onSubmit={submit} noValidate className="mx-auto max-w-xl">
+        {existing?.seriesId && (
+          <div className={cx('mb-4 flex gap-3 rounded-2xl p-3.5 text-sm', seriesEdit ? 'bg-accent/10 text-text' : 'bg-surface2 text-muted')}>
+            <Repeat2 className={cx('mt-0.5 h-5 w-5 shrink-0', seriesEdit ? 'text-accent' : 'text-muted')} />
+            <span>
+              {seriesEdit
+                ? <>As alterações valem para esta e para as próximas <b>{existing.seriesNext}</b> atividade{existing.seriesNext === 1 ? '' : 's'} planejada{existing.seriesNext === 1 ? '' : 's'} da repetição. A data só muda nesta; as demais mantêm os próprios dias.</>
+                : <>Editando somente esta ocorrência. As outras datas da repetição não mudam.</>}
+            </span>
+          </div>
+        )}
         <label className="card mb-5 flex items-center gap-3 p-3.5">
           <CalendarDays className="h-6 w-6 text-accent" />
           <span className="flex-1">

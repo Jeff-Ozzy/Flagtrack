@@ -34,6 +34,8 @@ export interface Activity {
   timerElapsedSec: number;
   actualDurationSec: number | null;
   exercises?: ActivityExercise[];
+  /** Planned occurrences of the same series from this date on (detail only). */
+  seriesNext?: number;
 }
 
 export interface ActivityExercise {

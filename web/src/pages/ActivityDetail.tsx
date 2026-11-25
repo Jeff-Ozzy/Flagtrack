@@ -7,7 +7,7 @@ import { CATEGORY_COLORS, REMINDER_LABELS, formatDuration, formatRemaining, isEl
 import { ExerciseChecklist, Stopwatch, formatSeconds } from '../components/exercises';
 import { CategoryIcon } from '../components/icons';
 import { CompleteModal, StatusPill, categoryLabel } from '../components/sport';
-import { Button, Card, ConfirmModal, DemoBadge, ErrorState, LinkButton, PageHeader, PageLoading } from '../components/ui';
+import { Button, Card, ConfirmModal, Modal, DemoBadge, ErrorState, LinkButton, PageHeader, PageLoading } from '../components/ui';
 import { api } from '../lib/api';
 import { serverNow, useAction, useServerTime, useTick } from '../lib/hooks';
 import type { Activity } from '../lib/types';
@@ -20,6 +20,7 @@ export default function ActivityDetail() {
   const q = useQuery({ queryKey: ['activity', id], queryFn: () => api<Activity & { isDemo?: boolean }>(`/activities/${id}`) });
   const [complete, setComplete] = useState(false);
   const [del, setDel] = useState(false);
+  const [editChoice, setEditChoice] = useState(false);
   const status = useAction((s: string) => api(`/activities/${id}/status`, { body: { status: s } }), {
     success: (r: any) => ({ PLANNED: 'Atividade reaberta.', MISSED: 'Marcada como não realizada.', CANCELLED: 'Atividade cancelada.', COMPLETED: 'Concluída!' } as Record<string, string>)[r.activity.status],
   });
@@ -87,7 +88,9 @@ export default function ActivityDetail() {
       )}
 
       <div className="mt-5 grid grid-cols-2 gap-2.5">
-        <LinkButton to={`/activities/${a.id}/edit`} variant="soft" icon={Pencil}>Editar</LinkButton>
+        {a.seriesId && (a.seriesNext ?? 0) > 0
+          ? <Button variant="soft" icon={Pencil} onClick={() => setEditChoice(true)}>Editar</Button>
+          : <LinkButton to={`/activities/${a.id}/edit`} variant="soft" icon={Pencil}>Editar</LinkButton>}
         {a.status === 'PLANNED' && !(c && !c.ok && c.code === 'FUTURE_DAY') && (
           <Button variant="soft" icon={CircleSlash} loading={status.isPending && status.variables === 'MISSED'} onClick={() => status.mutate('MISSED')}>Não realizada</Button>
         )}
@@ -98,6 +101,20 @@ export default function ActivityDetail() {
       {a.status === 'COMPLETED' && <p className="mt-2 text-xs text-muted">Reabrir uma atividade concluída remove o XP e o dia de ofensiva correspondentes. Concluir novamente depende da janela de 24 horas.</p>}
 
       <CompleteModal activity={a} open={complete} onClose={() => setComplete(false)} />
+      <Modal open={editChoice} onClose={() => setEditChoice(false)} title="Editar atividade recorrente">
+        <p className="mb-4 text-sm text-muted">Esta atividade se repete. O que você quer alterar?</p>
+        <div className="grid gap-2.5">
+          <button type="button" onClick={() => nav(`/activities/${a.id}/edit`)} className="rounded-2xl border border-line bg-surface2 p-4 text-left transition hover:border-accent">
+            <span className="block font-semibold">Somente esta ocorrência</span>
+            <span className="text-sm text-muted">Altera apenas a de {DateTime.fromISO(a.date).setLocale('pt-BR').toFormat("d 'de' LLLL")}. As demais datas continuam como estão.</span>
+          </button>
+          <button type="button" onClick={() => nav(`/activities/${a.id}/edit?scope=series`)} className="rounded-2xl border border-line bg-surface2 p-4 text-left transition hover:border-accent">
+            <span className="block font-semibold">Todas as ocorrências</span>
+            <span className="text-sm text-muted">Aplica as alterações nesta e nas próximas {a.seriesNext} atividade{a.seriesNext === 1 ? '' : 's'} planejada{a.seriesNext === 1 ? '' : 's'} da repetição. Cada uma mantém a própria data.</span>
+          </button>
+        </div>
+        <Button variant="ghost" className="mt-3 w-full" onClick={() => setEditChoice(false)}>Cancelar</Button>
+      </Modal>
       <ConfirmModal open={del} onClose={() => setDel(false)} onConfirm={() => remove.mutate('one')} title="Excluir atividade?" danger confirmLabel="Excluir" loading={remove.isPending}>
         A atividade será removida definitivamente. Se estava concluída, o XP e o dia de ofensiva também serão removidos.
         {a.seriesId && (

@@ -444,3 +444,54 @@ describe('cronômetro, checklist de exercícios e PRs', () => {
     expect((await agent.get('/api/exercises').expect(200)).body[0].prCount).toBe(0);
   });
 });
+
+describe('edição de atividades recorrentes', () => {
+  async function series(agent: Awaited<ReturnType<typeof athlete>>['agent']) {
+    await agent
+      .post('/api/activities')
+      .send(activity({ title: 'Mobilidade', category: 'MOBILIDADE', date: '2026-11-02', recurrence: { weekdays: [1, 3, 5], until: '2026-11-13' }, exercises: [{ name: 'Ponte', sets: 3, reps: 12, loadKg: null, durationSec: null, notes: null, done: false }] }))
+      .expect(201);
+    const items = (await agent.get('/api/activities?from=2026-11-01&to=2026-11-30').expect(200)).body.items as { id: string; date: string; title: string; startTime: string }[];
+    return items.sort((a, b) => a.date.localeCompare(b.date));
+  }
+
+  it('somente esta ocorrência não altera as outras', async () => {
+    const { agent } = await athlete();
+    const list = await series(agent); // 02, 04, 06, 09, 11, 13
+    const target = list[2];
+    expect((await agent.get(`/api/activities/${target.id}`).expect(200)).body.seriesNext).toBe(3);
+    const r = await agent.put(`/api/activities/${target.id}`).send(activity({ title: 'Mobilidade leve', category: 'MOBILIDADE', date: target.date, startTime: '09:00', endTime: '10:00' })).expect(200);
+    expect(r.body.updated).toBe(1);
+    const after = (await agent.get('/api/activities?from=2026-11-01&to=2026-11-30').expect(200)).body.items;
+    expect(after.filter((a: { title: string }) => a.title === 'Mobilidade leve')).toHaveLength(1);
+  });
+
+  it('todas as ocorrências: aplica nesta e nas próximas planejadas, mantendo datas, passadas e concluídas', async () => {
+    const { agent } = await athlete();
+    const list = await series(agent);
+    await agent.post(`/api/activities/${list[0].id}/status`).send({ status: 'COMPLETED' }).expect(200); // ontem, concluída
+    await agent.post(`/api/activities/${list[4].id}/status`).send({ status: 'CANCELLED' }).expect(200);
+    const target = list[1]; // 04/11
+    const d = (await agent.get(`/api/activities/${list[3].id}`).expect(200)).body; // 09/11: marca progresso para checar preservação
+    expect(d.exercises).toHaveLength(1);
+    const r = await agent
+      .put(`/api/activities/${target.id}?scope=series`)
+      .send(activity({ title: 'Mobilidade de joelho', category: 'MOBILIDADE', date: target.date, startTime: '18:00', endTime: '18:30', reminderType: 'MIN_30', exercises: [{ name: 'Ponte', sets: 4, reps: 15, loadKg: null, durationSec: null, notes: null, done: false }, { name: 'Prancha', sets: 3, reps: null, loadKg: null, durationSec: 45, notes: null, done: false }] }))
+      .expect(200);
+    expect(r.body.updated).toBe(4); // 04, 06, 09, 13 (11 cancelada, 02 anterior)
+    const after = ((await agent.get('/api/activities?from=2026-11-01&to=2026-11-30').expect(200)).body.items as any[]).sort((a, b) => a.date.localeCompare(b.date));
+    expect(after.map((a) => [a.date, a.title, a.startTime])).toEqual([
+      ['2026-11-02', 'Mobilidade', '07:00'],
+      ['2026-11-04', 'Mobilidade de joelho', '18:00'],
+      ['2026-11-06', 'Mobilidade de joelho', '18:00'],
+      ['2026-11-09', 'Mobilidade de joelho', '18:00'],
+      ['2026-11-11', 'Mobilidade', '07:00'],
+      ['2026-11-13', 'Mobilidade de joelho', '18:00'],
+    ]);
+    const ninth = after[3];
+    expect(new Date(ninth.reminderAt).toISOString()).toBe(new Date('2026-11-09T17:30:00-03:00').toISOString());
+    const ex = (await agent.get(`/api/activities/${ninth.id}`).expect(200)).body.exercises;
+    expect(ex.map((e: { name: string; sets: number }) => [e.name, e.sets])).toEqual([['Ponte', 4], ['Prancha', 3]]);
+    expect(ex[0].id).toBe(d.exercises[0].id); // mesmo item, não recriado
+  });
+});

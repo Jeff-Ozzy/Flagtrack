@@ -396,6 +396,19 @@ describe('cronômetro, checklist e PRs no aparelho', () => {
   });
 });
 
+describe('edição de recorrência no aparelho', () => {
+  it('somente esta x todas as ocorrências', async () => {
+    await ok('POST', '/activities', activity({ title: 'Corrida', category: 'CORRIDA', recurrence: { weekdays: [2, 4], until: '2026-11-19' } }));
+    const list = (await ok('GET', '/activities')).items.sort((a: any, b: any) => a.date.localeCompare(b.date));
+    expect(list).toHaveLength(6); // 03, 05, 10, 12, 17, 19
+    expect((await ok('GET', `/activities/${list[1].id}`)).seriesNext).toBe(4);
+    expect((await ok('PUT', `/activities/${list[0].id}`, activity({ title: 'Corrida curta', category: 'CORRIDA' }))).updated).toBe(1);
+    expect((await ok('PUT', `/activities/${list[2].id}?scope=series`, activity({ title: 'Corrida 5 km', category: 'CORRIDA', date: list[2].date }))).updated).toBe(4);
+    const titles = (await ok('GET', '/activities')).items.sort((a: any, b: any) => a.date.localeCompare(b.date)).map((a: any) => a.title);
+    expect(titles).toEqual(['Corrida curta', 'Corrida', 'Corrida 5 km', 'Corrida 5 km', 'Corrida 5 km', 'Corrida 5 km']);
+  });
+});
+
 describe('relatórios gerados no aparelho', () => {
   it('PDF e Excel válidos com os dados do atleta', async () => {
     await ok('POST', '/activities', { ...activity({ title: 'Sprint 40 jardas' }), markCompleted: true });
