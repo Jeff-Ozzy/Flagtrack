@@ -13,12 +13,14 @@ export const XP_RULES = {
   record: 30,
   goal: 40,
   streak7: 50,
+  exercisePR: 30,
 } as const;
 
 export const XP_RULE_LABELS = [
   { label: 'Concluir uma atividade elegível', xp: XP_RULES.activity },
   { label: 'Registrar uma tentativa de desafio', xp: XP_RULES.attempt },
   { label: 'Bater um recorde pessoal em desafio', xp: XP_RULES.record },
+  { label: 'Bater um recorde pessoal (PR) em exercício', xp: XP_RULES.exercisePR },
   { label: 'Cumprir uma meta semanal', xp: XP_RULES.goal },
   { label: 'A cada 7 dias seguidos de ofensiva', xp: XP_RULES.streak7 },
 ];

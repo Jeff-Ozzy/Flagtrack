@@ -14,7 +14,7 @@ export const DEFAULT_POSITIONS = [
 
 export const ACTIVITY_CATEGORIES = [
   'TECNICO', 'FISICO', 'ACADEMIA', 'CORRIDA', 'MOBILIDADE', 'COLETIVO',
-  'DESAFIO', 'JOGO', 'CAMPEONATO', 'DESCANSO', 'OUTRA',
+  'DESAFIO', 'JOGO', 'CAMPEONATO', 'CROSSFIT', 'DESCANSO', 'OUTRA',
 ] as const;
 export type ActivityCategory = (typeof ACTIVITY_CATEGORIES)[number];
 
@@ -28,6 +28,7 @@ export const CATEGORY_LABELS: Record<ActivityCategory, string> = {
   DESAFIO: 'Desafio',
   JOGO: 'Jogo',
   CAMPEONATO: 'Campeonato',
+  CROSSFIT: 'CrossFit / WOD',
   DESCANSO: 'Descanso',
   OUTRA: 'Outra atividade',
 };
@@ -42,6 +43,7 @@ export const CATEGORY_COLORS: Record<ActivityCategory, string> = {
   DESAFIO: '#F472B6',
   JOGO: '#F87171',
   CAMPEONATO: '#FB923C',
+  CROSSFIT: '#EF4444',
   DESCANSO: '#94A3B8',
   OUTRA: '#CBD5E1',
 };

@@ -1,19 +1,21 @@
 import { useQuery } from '@tanstack/react-query';
-import { Ban, Bell, Check, CircleSlash, Clock, MapPin, Pencil, RotateCcw, Target, Trash2, Trophy, Users } from 'lucide-react';
+import { Ban, Bell, Check, CircleSlash, Clock, MapPin, Pencil, RotateCcw, Target, Timer, Trash2, Trophy, Users } from 'lucide-react';
 import { DateTime } from 'luxon';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CATEGORY_COLORS, REMINDER_LABELS, formatDuration, formatRemaining, isEligibleCategory, type ActivityCategory, type ReminderType } from '@flagtrack/shared';
+import { ExerciseChecklist, Stopwatch, formatSeconds } from '../components/exercises';
 import { CategoryIcon } from '../components/icons';
 import { CompleteModal, StatusPill, categoryLabel } from '../components/sport';
 import { Button, Card, ConfirmModal, DemoBadge, ErrorState, LinkButton, PageHeader, PageLoading } from '../components/ui';
 import { api } from '../lib/api';
-import { serverNow, useAction, useTick } from '../lib/hooks';
+import { serverNow, useAction, useServerTime, useTick } from '../lib/hooks';
 import type { Activity } from '../lib/types';
 
 export default function ActivityDetail() {
   useTick(30_000);
   const { id } = useParams();
+  const time = useServerTime();
   const nav = useNavigate();
   const q = useQuery({ queryKey: ['activity', id], queryFn: () => api<Activity & { isDemo?: boolean }>(`/activities/${id}`) });
   const [complete, setComplete] = useState(false);
@@ -50,14 +52,18 @@ export default function ActivityDetail() {
           {a.location && <div className="flex items-center gap-2"><MapPin className="h-4 w-4 text-muted" />{a.location}</div>}
           {a.reminderType !== 'NONE' && <div className="flex items-center gap-2"><Bell className="h-4 w-4 text-info" />{REMINDER_LABELS[a.reminderType as ReminderType]}{a.reminderTime ? ` (${a.reminderTime})` : ''}{a.status !== 'PLANNED' && ' — inativo (atividade não está planejada)'}</div>}
         </div>
-        {a.description && <p className="mt-3 text-sm">{a.description}</p>}
-        {a.notes && <p className="mt-3 rounded-xl bg-surface2 p-3 text-sm"><span className="text-muted">Observações: </span>{a.notes}</p>}
-        {a.completionNotes && <p className="mt-3 rounded-xl bg-accent/10 p-3 text-sm"><span className="text-muted">Após o treino: </span>{a.completionNotes}</p>}
+        {a.description && <p className="mt-3 whitespace-pre-line text-sm">{a.description}</p>}
+        {a.notes && <p className="mt-3 whitespace-pre-line rounded-xl bg-surface2 p-3 text-sm"><span className="text-muted">Observações: </span>{a.notes}</p>}
+        {a.completionNotes && <p className="mt-3 whitespace-pre-line rounded-xl bg-accent/10 p-3 text-sm"><span className="text-muted">Após o treino: </span>{a.completionNotes}</p>}
+        {a.actualDurationSec != null && a.status === 'COMPLETED' && <div className="mt-3 flex items-center gap-2 text-sm"><Timer className="h-4 w-4 text-accent" />Duração cronometrada: <b>{formatSeconds(a.actualDurationSec)}</b></div>}
         {a.completedAt && <p className="mt-3 text-xs text-muted">Concluída em {new Date(a.completedAt).toLocaleString('pt-BR')}</p>}
         {!isEligibleCategory(a.category) && <p className="mt-3 text-xs text-muted">Atividades de descanso não contam para a ofensiva nem geram XP.</p>}
       </Card>
 
-      {a.status === 'PLANNED' && c && (
+      {time && <Stopwatch activity={a} today={time.today} />}
+      {time && <ExerciseChecklist activity={a} today={time.today} />}
+
+      {a.status === 'PLANNED' && c && !a.timerStartedAt && !a.timerElapsedSec && (
         <div className="mt-4">
           {c.ok ? (
             <>

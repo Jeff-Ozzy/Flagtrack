@@ -1,5 +1,5 @@
 import {
-  Activity as ActivityIcon, BedDouble, Dumbbell, Footprints, HeartPulse, Shield, Sparkles, Target, Trophy, Users, Zap,
+  Activity as ActivityIcon, BedDouble, Dumbbell, Flame, Footprints, HeartPulse, Shield, Sparkles, Target, Trophy, Users, Zap,
 } from 'lucide-react';
 
 const MAP = {
@@ -12,6 +12,7 @@ const MAP = {
   DESAFIO: Target,
   JOGO: Shield,
   CAMPEONATO: Trophy,
+  CROSSFIT: Flame,
   DESCANSO: BedDouble,
   OUTRA: ActivityIcon,
 } as const;

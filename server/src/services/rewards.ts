@@ -8,6 +8,7 @@ import { userTz } from '../auth';
 import { clock, prisma } from '../db';
 import { isUniqueViolation } from '../http';
 import { pickStats } from './analytics';
+import { exerciseGroups } from './exercises';
 
 export function goalLabel(g: Pick<WeeklyGoal, 'type' | 'target' | 'category'>): string {
   switch (g.type as GoalType) {
@@ -86,6 +87,15 @@ export async function syncRewards(userId: string) {
         anyRecord = true;
         expected.set(`record:${h.attempt.id}`, { amount: XP_RULES.record, reason: `Recorde pessoal: ${c.name}` });
       }
+    }
+  }
+
+  // Exercise PRs (checklist items done in completed or planned activities up to today).
+  for (const g of await exerciseGroups(userId, today)) {
+    for (const h of g.summary.history) {
+      if (!h.prs.length) continue;
+      anyRecord = true;
+      expected.set(`exercisePR:${h.id}`, { amount: XP_RULES.exercisePR, reason: `Recorde pessoal: ${g.name}` });
     }
   }
 

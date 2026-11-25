@@ -30,6 +30,33 @@ export interface Activity {
   game?: { id: string; opponent: string; championshipId: string } | null;
   collective?: { id: string; name: string } | null;
   attempts?: { id: string; value: number; challenge: { id: string; name: string; measureType: string } }[];
+  timerStartedAt: string | null;
+  timerElapsedSec: number;
+  actualDurationSec: number | null;
+  exercises?: ActivityExercise[];
+}
+
+export interface ActivityExercise {
+  id: string;
+  order: number;
+  name: string;
+  nameKey: string;
+  sets: number | null;
+  reps: number | null;
+  loadKg: number | null;
+  durationSec: number | null;
+  notes: string | null;
+  done: boolean;
+  doneAt: string | null;
+  prs?: string[];
+}
+
+export interface ActiveTimer {
+  id: string;
+  title: string;
+  category: string;
+  timerStartedAt: string | null;
+  timerElapsedSec: number;
 }
 
 export interface Profile {

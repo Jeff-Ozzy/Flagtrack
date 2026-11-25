@@ -6,3 +6,4 @@ export * from './challenges';
 export * from './gamification';
 export * from './schemas';
 export * from './insights';
+export * from './exercises';

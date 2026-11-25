@@ -4,13 +4,14 @@ import { Router } from 'express';
 import { DateTime } from 'luxon';
 import { z } from 'zod';
 import {
-  ACTIVITY_CATEGORIES, ACTIVITY_STATUSES, activitySchema, activityStatusSchema, checkCompletion, dateRange, localDate,
-  zonedInstant, type ActivityInput,
+  ACTIVITY_CATEGORIES, ACTIVITY_STATUSES, activitySchema, activityStatusSchema, checkCompletion, dateRange, exerciseKey,
+  exerciseUpdateSchema, localDate, timerActionSchema, zonedInstant, type ActivityInput, type ExerciseInput,
 } from '@flagtrack/shared';
 import { userTz } from '../auth';
 import { clock, prisma } from '../db';
 import { HttpError, ah, isUniqueViolation, notFound, parse } from '../http';
 import { streakState } from '../services/analytics';
+import { exerciseGroups } from '../services/exercises';
 import { syncRewards } from '../services/rewards';
 
 export const activitiesRouter = Router();
@@ -106,18 +107,55 @@ activitiesRouter.get('/reminders', ah(async (req, res) => {
   res.json(items);
 }));
 
+/** The activity whose stopwatch is running or paused (shown as a bar across the app). */
+activitiesRouter.get('/active-timer', ah(async (req, res) => {
+  const list = await prisma.activity.findMany({
+    where: { userId: req.userId, status: 'PLANNED', OR: [{ timerStartedAt: { not: null } }, { timerElapsedSec: { gt: 0 } }] },
+    select: { id: true, title: true, category: true, timerStartedAt: true, timerElapsedSec: true },
+    orderBy: { updatedAt: 'desc' },
+    take: 1,
+  });
+  res.json(list[0] ?? null);
+}));
+
+/** Exercises of the most recent activity with the same name (repeat a routine and progress loads). */
+activitiesRouter.get('/exercise-template', ah(async (req, res) => {
+  const title = String(req.query.title ?? '').trim().toLowerCase();
+  const exclude = String(req.query.exclude ?? '');
+  if (!title) return void res.json(null);
+  const acts = await prisma.activity.findMany({
+    where: { userId: req.userId },
+    include: { exercises: { orderBy: { order: 'asc' } } },
+    orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+  });
+  const a = acts.find((x) => x.id !== exclude && x.exercises.length > 0 && x.title.trim().toLowerCase() === title);
+  res.json(a ? {
+    activityId: a.id,
+    date: a.date,
+    exercises: a.exercises.map(({ name, sets, reps, loadKg, durationSec, notes }) => ({ name, sets, reps, loadKg, durationSec, notes })),
+  } : null);
+}));
+
 activitiesRouter.get('/:id', ah(async (req, res) => {
   const tz = await userTz(req.userId);
   const a = await prisma.activity.findFirst({
     where: { id: req.params.id, userId: req.userId },
     include: {
+      exercises: { orderBy: { order: 'asc' } },
       game: { select: { id: true, opponent: true, championshipId: true } },
       collective: { select: { id: true, name: true } },
       attempts: { include: { challenge: { select: { id: true, name: true, measureType: true } } } },
     },
   });
   if (!a) throw notFound('Atividade');
-  res.json(withCompletion(a, tz, clock.now()));
+  // PR flags of this activity's checked exercises (compared with all earlier sessions).
+  const prs = new Map<string, string[]>();
+  if (a.exercises.some((e) => e.done)) {
+    for (const g of await exerciseGroups(req.userId, localDate(clock.now(), tz))) {
+      for (const h of g.summary.history) if (h.activityId === a.id && h.prs.length) prs.set(h.id, h.prs);
+    }
+  }
+  res.json({ ...withCompletion(a, tz, clock.now()), exercises: a.exercises.map((e) => ({ ...e, prs: prs.get(e.id) ?? [] })) });
 }));
 
 const createExtras = z.object({
@@ -151,7 +189,7 @@ activitiesRouter.post('/', ah(async (req, res) => {
   }
 
   const seriesId = dates.length > 1 ? randomUUID() : null;
-  const { recurrence: _r, clientId, ...data } = body;
+  const { recurrence: _r, clientId, exercises, ...data } = body;
   try {
     const created = await prisma.$transaction(
       dates.map((date, i) =>
@@ -168,6 +206,12 @@ activitiesRouter.post('/', ah(async (req, res) => {
         }),
       ),
     );
+    // Same checklist on every occurrence of a recurring activity.
+    if (exercises.length) {
+      for (const a of created) {
+        await prisma.activityExercise.createMany({ data: exerciseRows(exercises, a.id, req.userId, now) });
+      }
+    }
     const rewards = await syncRewards(req.userId);
     res.status(201).json({
       activity: withCompletion(created[0], tz, now),
@@ -195,7 +239,9 @@ activitiesRouter.put('/:id', ah(async (req, res) => {
     if (!check.ok) throw completionError(check);
   }
   const derived = derive(body, tz);
-  const { recurrence: _r, clientId: _c, ...data } = body;
+  const { recurrence: _r, clientId: _c, exercises, ...data } = body;
+  // Only touch the checklist when the client sent it (older clients omit the field).
+  if (Array.isArray(req.body?.exercises)) await syncExercises(current.id, req.userId, exercises, now);
   const updated = await prisma.activity.update({
     where: { id: current.id },
     data: {
@@ -231,10 +277,122 @@ activitiesRouter.post('/:id/status', ah(async (req, res) => {
       status: body.status,
       completedAt: body.status === 'COMPLETED' ? now : null,
       completionNotes: body.status === 'COMPLETED' ? body.completionNotes : current.completionNotes,
+      // Completing while the stopwatch runs keeps the measured time; any other status stops it.
+      ...(current.timerStartedAt || current.timerElapsedSec > 0
+        ? {
+            timerStartedAt: null,
+            timerElapsedSec: current.timerElapsedSec + (current.timerStartedAt ? Math.max(0, Math.round((+now - +current.timerStartedAt) / 1000)) : 0),
+            ...(body.status === 'COMPLETED' ? { actualDurationSec: current.timerElapsedSec + (current.timerStartedAt ? Math.max(0, Math.round((+now - +current.timerStartedAt) / 1000)) : 0) } : {}),
+          }
+        : {}),
     },
   });
   const rewards = await syncRewards(req.userId);
   res.json({ activity: withCompletion(updated, tz, now), rewards, streak: await streakState(req.userId, tz, now) });
+}));
+
+/** Only items the athlete checked count as done (never assumed from the activity status). */
+function exerciseRows(list: ExerciseInput[], activityId: string, userId: string, now: Date) {
+  return list.map((e, order) => ({
+    userId, activityId, order, name: e.name, nameKey: exerciseKey(e.name), sets: e.sets, reps: e.reps, loadKg: e.loadKg,
+    durationSec: e.durationSec, notes: e.notes ?? null, done: e.done, doneAt: e.done ? now : null,
+  }));
+}
+
+/** Replaces the checklist keeping ids (and done state) of items that still exist. */
+async function syncExercises(activityId: string, userId: string, list: ExerciseInput[], now: Date) {
+  const existing = await prisma.activityExercise.findMany({ where: { activityId, userId } });
+  const keep = new Set(list.map((e) => e.id).filter(Boolean));
+  const toDelete = existing.filter((e) => !keep.has(e.id)).map((e) => e.id);
+  if (toDelete.length) await prisma.activityExercise.deleteMany({ where: { id: { in: toDelete } } });
+  for (const [order, e] of list.entries()) {
+    const values = {
+      order, name: e.name, nameKey: exerciseKey(e.name), sets: e.sets, reps: e.reps, loadKg: e.loadKg,
+      durationSec: e.durationSec, notes: e.notes ?? null,
+    };
+    const prev = e.id ? existing.find((x) => x.id === e.id) : null;
+    if (prev) {
+      await prisma.activityExercise.update({ where: { id: prev.id }, data: { ...values, done: e.done, doneAt: e.done ? prev.doneAt ?? now : null } });
+    } else {
+      await prisma.activityExercise.create({ data: { ...values, userId, activityId, done: e.done, doneAt: e.done ? now : null } });
+    }
+  }
+}
+
+/** Check off an exercise and record the values actually done (load, reps…). */
+activitiesRouter.patch('/:id/exercises/:exId', ah(async (req, res) => {
+  const body = parse(exerciseUpdateSchema, req.body);
+  const tz = await requireProfileTz(req.userId);
+  const now = clock.now();
+  const a = await owned(req.userId, req.params.id);
+  const ex = await prisma.activityExercise.findFirst({ where: { id: req.params.exId, activityId: a.id, userId: req.userId } });
+  if (!ex) throw notFound('Exercício');
+  if (body.done && a.date > localDate(now, tz)) {
+    throw new HttpError(422, 'Exercícios de dias futuros não podem ser marcados como feitos.', 'FUTURE_DAY');
+  }
+  const updated = await prisma.activityExercise.update({
+    where: { id: ex.id },
+    data: { ...body, ...(body.done !== undefined ? { doneAt: body.done ? ex.doneAt ?? now : null } : {}) },
+  });
+  const rewards = await syncRewards(req.userId);
+  res.json({ exercise: updated, rewards });
+}));
+
+/**
+ * Stopwatch. Elapsed = timerElapsedSec + (now - timerStartedAt), computed from timestamps,
+ * so it keeps counting with the app in background or even closed.
+ */
+activitiesRouter.post('/:id/timer', ah(async (req, res) => {
+  const body = parse(timerActionSchema, req.body);
+  const tz = await requireProfileTz(req.userId);
+  const now = clock.now();
+  const a = await owned(req.userId, req.params.id);
+  const elapsed = a.timerElapsedSec + (a.timerStartedAt ? Math.max(0, Math.round((+now - +a.timerStartedAt) / 1000)) : 0);
+  let data: Record<string, unknown>;
+  switch (body.action) {
+    case 'start':
+      if (a.status !== 'PLANNED') throw new HttpError(422, 'Só atividades planejadas podem ser iniciadas.', 'INVALID_STATE');
+      if (a.date !== localDate(now, tz)) throw new HttpError(422, 'O cronômetro só pode ser iniciado em atividades de hoje.', 'NOT_TODAY');
+      // Only one stopwatch at a time: pause any other running one.
+      for (const other of await prisma.activity.findMany({ where: { userId: req.userId, id: { not: a.id }, timerStartedAt: { not: null } } })) {
+        const otherElapsed = other.timerElapsedSec + Math.max(0, Math.round((+now - +other.timerStartedAt!) / 1000));
+        await prisma.activity.update({ where: { id: other.id }, data: { timerStartedAt: null, timerElapsedSec: otherElapsed } });
+      }
+      data = { timerStartedAt: now, timerElapsedSec: 0, actualDurationSec: null };
+      break;
+    case 'pause':
+      if (!a.timerStartedAt) throw new HttpError(422, 'O cronômetro não está rodando.', 'INVALID_STATE');
+      data = { timerStartedAt: null, timerElapsedSec: elapsed };
+      break;
+    case 'resume':
+      if (a.timerStartedAt || a.status !== 'PLANNED' || a.timerElapsedSec === 0) throw new HttpError(422, 'O cronômetro não está pausado.', 'INVALID_STATE');
+      data = { timerStartedAt: now };
+      break;
+    case 'reset':
+      data = { timerStartedAt: null, timerElapsedSec: 0 };
+      break;
+    case 'finish': {
+      if (a.status !== 'PLANNED' || (!a.timerStartedAt && a.timerElapsedSec === 0)) {
+        throw new HttpError(422, 'Inicie o cronômetro antes de finalizar.', 'INVALID_STATE');
+      }
+      // The stopwatch proves the activity happened now, so the planned start time does not block it.
+      const check = checkCompletion({ date: a.date, startTime: null, tz, now });
+      if (!check.ok) throw completionError(check);
+      data = {
+        timerStartedAt: null, timerElapsedSec: elapsed, actualDurationSec: elapsed, status: 'COMPLETED', completedAt: now,
+        completionNotes: body.completionNotes ?? a.completionNotes,
+      };
+      break;
+    }
+  }
+  const updated = await prisma.activity.update({ where: { id: a.id }, data });
+  const finished = body.action === 'finish';
+  const rewards = finished ? await syncRewards(req.userId) : { xpGained: 0, newAchievements: [] };
+  res.json({
+    activity: withCompletion(updated, tz, now),
+    rewards,
+    ...(finished ? { streak: await streakState(req.userId, tz, now) } : {}),
+  });
 }));
 
 activitiesRouter.delete('/:id', ah(async (req, res) => {

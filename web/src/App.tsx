@@ -12,6 +12,7 @@ import Calendar from './pages/Calendar';
 import { AttemptEdit, ChallengeDetail, ChallengeForm, ChallengesList } from './pages/Challenges';
 import { ChampionshipDetail, ChampionshipForm, ChampionshipsList, GameDetail, GameForm, GamesList, StageForm } from './pages/Championships';
 import { CollectiveDetail, CollectiveForm, CollectivesList } from './pages/Collectives';
+import { ExerciseDetailPage, ExercisesList } from './pages/Exercises';
 import Compare from './pages/Compare';
 import Dashboard from './pages/Dashboard';
 import Evolution from './pages/Evolution';
@@ -94,6 +95,8 @@ export default function App() {
         <Route path="analytics/collectives/new" element={<CollectiveForm />} />
         <Route path="analytics/collectives/:id" element={<CollectiveDetail />} />
         <Route path="analytics/collectives/:id/edit" element={<CollectiveForm />} />
+        <Route path="analytics/exercises" element={<ExercisesList />} />
+        <Route path="analytics/exercises/:key" element={<ExerciseDetailPage />} />
         <Route path="evolution" element={<Evolution />} />
         <Route path="evolution/compare" element={<Compare />} />
         <Route path="profile" element={<ProfilePage />} />

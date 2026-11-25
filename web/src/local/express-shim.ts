@@ -1,6 +1,6 @@
 /**
  * Minimal Express-compatible router so the API route modules from server/ run
- * unchanged in the browser (offline mode). Supports get/post/put/delete/use,
+ * unchanged in the browser (offline mode). Supports get/post/put/patch/delete/use,
  * path params, nested routers and error propagation through next(err).
  */
 
@@ -55,6 +55,7 @@ export class RouterShim {
   post(path: string, ...h: Handler[]) { return this.add('POST', path, h); }
   put(path: string, ...h: Handler[]) { return this.add('PUT', path, h); }
   delete(path: string, ...h: Handler[]) { return this.add('DELETE', path, h); }
+  patch(path: string, ...h: Handler[]) { return this.add('PATCH', path, h); }
   use(pathOrHandler: string | Handler | RouterShim, ...h: (Handler | RouterShim)[]) {
     return typeof pathOrHandler === 'string' ? this.add(null, pathOrHandler, h) : this.add(null, '/', [pathOrHandler, ...h]);
   }

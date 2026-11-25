@@ -9,6 +9,7 @@ import { attemptsRouter, challengesRouter } from '../../../server/src/routes/cha
 import { championshipsRouter, gamesRouter } from '../../../server/src/routes/championships';
 import { collectivesRouter } from '../../../server/src/routes/collectives';
 import { demoRouter } from '../../../server/src/routes/demo';
+import { exercisesRouter } from '../../../server/src/routes/exercises';
 import { insightsRouter } from '../../../server/src/routes/insights';
 import { profileRouter, weightRouter } from '../../../server/src/routes/profile';
 import { Router, type ShimRequest, type ShimResponse } from './express-shim';
@@ -27,6 +28,7 @@ api.use('/challenges', challengesRouter as never);
 api.use('/attempts', attemptsRouter as never);
 api.use('/collectives', collectivesRouter as never);
 api.use('/demo', demoRouter as never);
+api.use('/exercises', exercisesRouter as never);
 api.use('/', insightsRouter as never);
 
 let initialized: Promise<void> | null = null;

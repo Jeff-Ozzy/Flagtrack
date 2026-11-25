@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { Bell, CalendarDays, MapPin, Repeat } from 'lucide-react';
+import { Bell, CalendarDays, ListChecks, MapPin, Repeat } from 'lucide-react';
 import { DateTime } from 'luxon';
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -7,6 +7,7 @@ import {
   CATEGORY_LABELS, REMINDER_LABELS, REMINDER_TYPES, activitySchema, addDays, checkCompletion,
   formatRemaining, type ActivityCategory, type ReminderType,
 } from '@flagtrack/shared';
+import { ExerciseEditor, draftsToPayload, toDraft, type ExerciseDraft } from '../components/exercises';
 import { CategoryIcon } from '../components/icons';
 import { WEEKDAYS_SHORT } from '../components/sport';
 import { Button, Chips, ErrorState, Input, PageHeader, PageLoading, Select, Textarea, Toggle, cx } from '../components/ui';
@@ -16,7 +17,7 @@ import type { Activity } from '../lib/types';
 
 const defaultTitle: Partial<Record<ActivityCategory, string>> = {
   TECNICO: 'Treino técnico', FISICO: 'Treino físico', ACADEMIA: 'Academia', CORRIDA: 'Corrida', MOBILIDADE: 'Mobilidade',
-  COLETIVO: 'Coletivo', DESAFIO: 'Desafio', JOGO: 'Jogo', CAMPEONATO: 'Campeonato', DESCANSO: 'Descanso',
+  COLETIVO: 'Coletivo', DESAFIO: 'Desafio', JOGO: 'Jogo', CAMPEONATO: 'Campeonato', CROSSFIT: 'WOD', DESCANSO: 'Descanso',
 };
 
 export default function ActivityForm() {
@@ -47,6 +48,7 @@ function Form({ existing }: { existing?: Activity }) {
     reminderType: (existing?.reminderType ?? 'NONE') as ReminderType,
     reminderTime: existing?.reminderTime ?? '',
   });
+  const [exercises, setExercises] = useState<ExerciseDraft[]>(() => (existing?.exercises ?? []).map(toDraft));
   const [titleTouched, setTitleTouched] = useState(!!existing);
   const [repeat, setRepeat] = useState(false);
   const [weekdays, setWeekdays] = useState<string[]>([]);
@@ -71,8 +73,11 @@ function Form({ existing }: { existing?: Activity }) {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    const ex = draftsToPayload(exercises);
+    if ('error' in ex) return setErrors({ exercises: ex.error });
     const payload = {
       ...f,
+      exercises: ex.value,
       title: f.title || defaultTitle[f.category] || '',
       startTime: f.startTime || null,
       endTime: f.endTime || null,
@@ -90,7 +95,7 @@ function Form({ existing }: { existing?: Activity }) {
     save.mutate({ ...payload, ...(markCompleted && !existing ? { markCompleted: true, completionNotes: completionNotes || null } : {}) });
   };
 
-  const main: ActivityCategory[] = ['TECNICO', 'FISICO', 'ACADEMIA', 'CORRIDA', 'JOGO', 'COLETIVO', 'DESAFIO', 'MOBILIDADE', 'CAMPEONATO', 'DESCANSO', 'OUTRA'];
+  const main: ActivityCategory[] = ['TECNICO', 'FISICO', 'ACADEMIA', 'CORRIDA', 'JOGO', 'COLETIVO', 'DESAFIO', 'MOBILIDADE', 'CROSSFIT', 'CAMPEONATO', 'DESCANSO', 'OUTRA'];
   return (
     <>
       <PageHeader title={existing ? 'Editar atividade' : 'Registrar atividade'} back />
@@ -130,6 +135,11 @@ function Form({ existing }: { existing?: Activity }) {
           <Textarea label="Descrição (opcional)" value={f.description} onChange={(e) => set({ description: e.target.value })} maxLength={500} />
           <Textarea label="Observações (opcional)" value={f.notes} onChange={(e) => set({ notes: e.target.value })} maxLength={1000} />
           <Toggle checked={f.isFlagRelated} onChange={(v) => set({ isFlagRelated: v })} label="Relacionada ao Flag Football" description="Desmarque para compromissos complementares (ex.: academia fora da equipe)." />
+        </div>
+
+        <div className="card mt-4 p-4">
+          <div className="mb-3 flex items-center gap-2 font-semibold"><ListChecks className="h-4 w-4 text-accent" /> Exercícios (opcional)</div>
+          <ExerciseEditor value={exercises} onChange={setExercises} title={f.title || defaultTitle[f.category] || ''} excludeId={existing?.id} error={errors.exercises} />
         </div>
 
         <div className="card mt-4 p-4">

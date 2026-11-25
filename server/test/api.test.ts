@@ -361,3 +361,86 @@ function binaryParser(res: request.Response, cb: (err: Error | null, body: Buffe
   stream.on('end', () => cb(null, Buffer.concat(chunks)));
 }
 
+
+describe('cronômetro, checklist de exercícios e PRs', () => {
+  const ex = (name: string, loadKg: number | null, reps = 5, sets = 3) => ({ name, sets, reps, loadKg, durationSec: null, notes: null, done: false });
+
+  it('cronômetro conta pelo relógio do servidor, pausa, retoma e conclui', async () => {
+    const { agent } = await athlete();
+    const { body } = await agent.post('/api/activities').send(activity({ startTime: '21:00', endTime: '22:00' })).expect(201);
+    const id = body.activity.id;
+    await agent.post(`/api/activities/${id}/timer`).send({ action: 'finish' }).expect(422);
+    await agent.post(`/api/activities/${id}/timer`).send({ action: 'start' }).expect(200);
+    expect((await agent.get('/api/activities/active-timer').expect(200)).body.id).toBe(id);
+    clock.now = () => new Date(+SP_NOW + 600_000);
+    const paused = await agent.post(`/api/activities/${id}/timer`).send({ action: 'pause' }).expect(200);
+    expect(paused.body.activity.timerElapsedSec).toBe(600);
+    clock.now = () => new Date(+SP_NOW + 3_600_000);
+    await agent.post(`/api/activities/${id}/timer`).send({ action: 'resume' }).expect(200);
+    clock.now = () => new Date(+SP_NOW + 3_900_000);
+    // início planejado às 21h ainda não passou para o check normal, mas o cronômetro comprova a execução
+    const done = await agent.post(`/api/activities/${id}/timer`).send({ action: 'finish' }).expect(200);
+    expect(done.body.activity.status).toBe('COMPLETED');
+    expect(done.body.activity.actualDurationSec).toBe(900);
+    expect(done.body.streak.current).toBeGreaterThan(0);
+    expect((await agent.get('/api/activities/active-timer').expect(200)).body).toBeNull();
+  });
+
+  it('só inicia atividades de hoje', async () => {
+    const { agent } = await athlete();
+    const { body } = await agent.post('/api/activities').send(activity({ date: '2026-11-05' })).expect(201);
+    const r = await agent.post(`/api/activities/${body.activity.id}/timer`).send({ action: 'start' }).expect(422);
+    expect(r.body.error.code).toBe('NOT_TODAY');
+  });
+
+  it('checklist: cria, marca, edita mantendo o estado e copia para a recorrência', async () => {
+    const { agent } = await athlete();
+    const { body } = await agent
+      .post('/api/activities')
+      .send(activity({ title: 'Mobilidade de joelho', category: 'MOBILIDADE', exercises: [ex('Agachamento isométrico', null, 0, 3), ex('Ponte', null, 12)] }))
+      .expect(201);
+    const id = body.activity.id;
+    let detail = (await agent.get(`/api/activities/${id}`).expect(200)).body;
+    expect(detail.exercises.map((e: { name: string }) => e.name)).toEqual(['Agachamento isométrico', 'Ponte']);
+    await agent.patch(`/api/activities/${id}/exercises/${detail.exercises[1].id}`).send({ done: true, reps: 15 }).expect(200);
+    const kept = detail.exercises.map((e: Record<string, unknown>) => ({ ...e }));
+    kept[1].done = true;
+    kept[1].reps = 15;
+    await agent.put(`/api/activities/${id}`).send(activity({ title: 'Mobilidade de joelho', category: 'MOBILIDADE', exercises: [...kept.slice(1), ex('Prancha', null, 0)] })).expect(200);
+    detail = (await agent.get(`/api/activities/${id}`).expect(200)).body;
+    expect(detail.exercises.map((e: { name: string; done: boolean }) => [e.name, e.done])).toEqual([['Ponte', true], ['Prancha', false]]);
+
+    const rec = await agent
+      .post('/api/activities')
+      .send(activity({ title: 'Mobilidade', recurrence: { weekdays: [1, 3, 5], until: '2026-11-13' }, exercises: [ex('Alongamento', null, 0)] }))
+      .expect(201);
+    expect(rec.body.created).toBeGreaterThan(1);
+    const list = (await agent.get('/api/activities?from=2026-11-04&to=2026-11-13').expect(200)).body.items;
+    for (const a of list.filter((x: { title: string }) => x.title === 'Mobilidade')) {
+      expect((await agent.get(`/api/activities/${a.id}`).expect(200)).body.exercises).toHaveLength(1);
+    }
+    // não dá para marcar exercício de dia futuro
+    const future = list.find((x: { date: string; title: string }) => x.title === 'Mobilidade' && x.date > '2026-11-03');
+    const fd = (await agent.get(`/api/activities/${future.id}`).expect(200)).body;
+    await agent.patch(`/api/activities/${future.id}/exercises/${fd.exercises[0].id}`).send({ done: true }).expect(422);
+  });
+
+  it('PRs por exercício entre sessões e modelo da última sessão', async () => {
+    const { agent } = await athlete();
+    const s1 = await agent.post('/api/activities').send({ ...activity({ title: 'WOD', category: 'CROSSFIT', date: '2026-11-02', exercises: [{ ...ex('Back Squat', 80), done: true }] }), markCompleted: true }).expect(201);
+    expect(s1.body.rewards.xpGained).toBe(10); // primeira sessão é a base, sem PR
+    const s2 = await agent.post('/api/activities').send({ ...activity({ title: 'WOD', category: 'CROSSFIT', exercises: [{ ...ex('back  squat', 90), done: true }, { ...ex('Burpee', null, 30, 1), done: false }] }), markCompleted: true }).expect(201);
+    expect(s2.body.rewards.xpGained).toBe(10 + 30);
+    const list = (await agent.get('/api/exercises').expect(200)).body;
+    expect(list).toHaveLength(1); // Burpee não foi marcado: não conta
+    expect(list[0]).toMatchObject({ key: 'back squat', sessions: 2, prCount: 2 });
+    expect(list[0].best.loadKg.value).toBe(90);
+    const hist = (await agent.get('/api/exercises/back%20squat').expect(200)).body;
+    expect(hist.history.map((h: { prs: string[] }) => h.prs)).toEqual([[], ['loadKg', 'volume']]);
+    const tpl = (await agent.get('/api/activities/exercise-template?title=wod&exclude=' + s2.body.activity.id).expect(200)).body;
+    expect(tpl.exercises[0]).toMatchObject({ name: 'Back Squat', loadKg: 80 });
+    // desfazer a sessão remove o PR e o XP correspondente
+    await agent.delete(`/api/activities/${s2.body.activity.id}`).expect(200);
+    expect((await agent.get('/api/exercises').expect(200)).body[0].prCount).toBe(0);
+  });
+});

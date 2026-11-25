@@ -51,6 +51,40 @@ export const recurrenceSchema = z.object({
   until: isoDate,
 });
 
+const optInt = (min: number, max: number, label: string) =>
+  z.number({ invalid_type_error: `${label} inválido` }).int(`${label}: use número inteiro`).min(min, `${label}: mínimo ${min}`).max(max, `${label}: máximo ${max}`).nullable().default(null);
+
+/** Checklist item (exercise) inside an activity. */
+export const exerciseSchema = z.object({
+  id: z.string().nullish(),
+  name: z.string().trim().min(1, 'Informe o exercício').max(80),
+  sets: optInt(1, 100, 'Séries'),
+  reps: optInt(0, 1000, 'Repetições'),
+  loadKg: z.number({ invalid_type_error: 'Carga inválida' }).min(0, 'Carga não pode ser negativa').max(1000, 'Carga máxima 1000 kg').nullable().default(null),
+  durationSec: optInt(0, 36000, 'Tempo'),
+  notes: optText(200),
+  done: z.boolean().default(false),
+});
+export type ExerciseInput = z.infer<typeof exerciseSchema>;
+
+/** Actual values recorded while doing the exercise (all optional). */
+export const exerciseUpdateSchema = z.object({
+  done: z.boolean().optional(),
+  sets: optInt(1, 100, 'Séries').optional(),
+  reps: optInt(0, 1000, 'Repetições').optional(),
+  loadKg: z.number().min(0).max(1000).nullable().optional(),
+  durationSec: optInt(0, 36000, 'Tempo').optional(),
+});
+
+export const timerActionSchema = z.object({
+  action: z.enum(['start', 'pause', 'resume', 'finish', 'reset']),
+  completionNotes: optText(1000),
+});
+
+/** Groups exercises with the same name regardless of case/accents/spaces. */
+export const exerciseKey = (name: string) =>
+  name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
 export const activitySchema = z
   .object({
     title: z.string().trim().min(1, 'Informe o nome').max(80),
@@ -66,6 +100,7 @@ export const activitySchema = z
     reminderType: z.enum(REMINDER_TYPES).default('NONE'),
     reminderTime: optTime,
     recurrence: recurrenceSchema.nullish(),
+    exercises: z.array(exerciseSchema).max(40, 'Máximo de 40 exercícios').default([]),
     clientId,
   })
   .refine((a) => !a.startTime || !a.endTime || a.endTime > a.startTime, { message: 'O término deve ser depois do início', path: ['endTime'] })

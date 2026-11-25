@@ -346,6 +346,56 @@ describe('dados no aparelho', () => {
   });
 });
 
+describe('cronômetro, checklist e PRs no aparelho', () => {
+  const ex = (name: string, loadKg: number | null, done = false) => ({ name, sets: 3, reps: 5, loadKg, durationSec: null, notes: null, done });
+
+  it('o cronômetro continua contando com o app fechado e conclui a atividade', async () => {
+    const a = (await ok('POST', '/activities', activity({ title: 'Academia', category: 'ACADEMIA', startTime: null, endTime: null }))).activity;
+    await ok('POST', `/activities/${a.id}/timer`, { action: 'start' });
+    await B.flush();
+    vi.setSystemTime(new Date(+SP_NOW + 45 * 60_000)); // app fechado por 45 min
+    await boot();
+    const t = await ok('GET', '/activities/active-timer');
+    expect(t.id).toBe(a.id);
+    expect(typeof t.timerStartedAt).toBe('string');
+    const r = await ok('POST', `/activities/${a.id}/timer`, { action: 'finish' });
+    expect(r.activity.status).toBe('COMPLETED');
+    expect(r.activity.actualDurationSec).toBe(45 * 60);
+    expect(await ok('GET', '/activities/active-timer')).toBeNull();
+  });
+
+  it('dados salvos por versões antigas do app ganham os campos novos', async () => {
+    const a = (await ok('POST', '/activities', activity())).activity;
+    const db = await import('../src/local/server-db');
+    const snap = JSON.parse(JSON.stringify(db.snapshot()));
+    for (const r of snap.tables.activity) { delete r.timerElapsedSec; delete r.timerStartedAt; delete r.actualDurationSec; }
+    delete snap.tables.activityExercise;
+    db.loadSnapshot(snap);
+    const d = await ok('GET', `/activities/${a.id}`);
+    expect(d.timerElapsedSec).toBe(0);
+    expect(d.exercises).toEqual([]);
+    expect((await ok('POST', `/activities/${a.id}/timer`, { action: 'start' })).activity.timerStartedAt).toBeTruthy();
+  });
+
+  it('checklist marcado gera histórico e PR; não marcado não conta', async () => {
+    const s1 = await ok('POST', '/activities', { ...activity({ title: 'WOD', category: 'CROSSFIT', date: '2026-11-02', exercises: [ex('Deadlift', 100, true)] }), markCompleted: true });
+    const s2 = (await ok('POST', '/activities', activity({ title: 'WOD', category: 'CROSSFIT', exercises: [ex('Deadlift', 110), ex('Wall ball', 9)] }))).activity;
+    const d = await ok('GET', `/activities/${s2.id}`);
+    const r = await ok('PATCH', `/activities/${s2.id}/exercises/${d.exercises[0].id}`, { done: true, loadKg: 115 });
+    expect(r.rewards.xpGained).toBe(30);
+    const detail = await ok('GET', `/activities/${s2.id}`);
+    expect(detail.exercises[0].prs).toEqual(['loadKg', 'volume']);
+    const list = await ok('GET', '/exercises');
+    expect(list.map((e: { name: string }) => e.name)).toEqual(['Deadlift']);
+    expect(list[0].best.loadKg.value).toBe(115);
+    expect((await ok('GET', '/exercises/deadlift')).history).toHaveLength(2);
+    expect(s1.activity.id).toBeTruthy();
+    await B.flush();
+    await boot();
+    expect((await ok('GET', `/activities/${s2.id}`)).exercises.map((e: { done: boolean }) => e.done)).toEqual([true, false]);
+  });
+});
+
 describe('relatórios gerados no aparelho', () => {
   it('PDF e Excel válidos com os dados do atleta', async () => {
     await ok('POST', '/activities', { ...activity({ title: 'Sprint 40 jardas' }), markCompleted: true });

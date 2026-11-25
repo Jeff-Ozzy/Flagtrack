@@ -13,6 +13,7 @@ import { attemptsRouter, challengesRouter } from './routes/challenges';
 import { championshipsRouter, gamesRouter } from './routes/championships';
 import { collectivesRouter } from './routes/collectives';
 import { demoRouter } from './routes/demo';
+import { exercisesRouter } from './routes/exercises';
 import { insightsRouter } from './routes/insights';
 import { profileRouter, weightRouter } from './routes/profile';
 import { reportsRouter } from './routes/reports';
@@ -51,6 +52,7 @@ export function createApp() {
   api.use('/reports', reportsRouter);
   api.use('/push', pushRouter);
   api.use('/demo', demoRouter);
+  api.use('/exercises', exercisesRouter);
   api.use('/', insightsRouter);
   app.use('/api', api);
   app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Rota não encontrada.', 'NOT_FOUND')));

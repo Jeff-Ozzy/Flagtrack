@@ -7,7 +7,9 @@ import { IS_LOCAL, api } from '../lib/api';
 import { serverNow, useServerTime } from '../lib/hooks';
 import { IS_NATIVE } from '../lib/native';
 import { localNotify } from '../lib/push';
+import type { ActiveTimer } from '../lib/types';
 import { ErrorBoundary } from './ErrorBoundary';
+import { ActiveTimerBar } from './exercises';
 import { useToast } from './Toast';
 import { StreakFlame } from './sport';
 import { cx } from './ui';
@@ -180,6 +182,7 @@ export default function Layout() {
 
         <main className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:px-8 md:pb-12 md:pt-8">
           <ErrorBoundary resetKey={loc.pathname}>
+            <ActiveTimerBar />
             <Outlet />
           </ErrorBoundary>
         </main>
@@ -200,6 +203,7 @@ export default function Layout() {
       <ReminderWatcher />
       {IS_LOCAL && <LocalWatcher />}
       {IS_NATIVE && <NativeReminderSync />}
+      {IS_NATIVE && <NativeTimerSync />}
     </div>
   );
 }
@@ -266,5 +270,16 @@ function NativeReminderSync() {
       window.removeEventListener('ft:saved', sync);
     };
   }, [nav]);
+  return null;
+}
+
+/** APK: ongoing notification while an activity stopwatch is running. */
+function NativeTimerSync() {
+  const q = useQuery({ queryKey: ['active-timer'], queryFn: () => api<ActiveTimer | null>('/activities/active-timer'), refetchInterval: 60_000 });
+  const t = q.data;
+  useEffect(() => {
+    if (q.isLoading) return;
+    import('../lib/nativeReminders').then((m) => m.syncTimerNotification(t ?? null)).catch((e) => console.warn('[cronômetro]', e));
+  }, [t?.id, t?.timerStartedAt, q.isLoading]);
   return null;
 }

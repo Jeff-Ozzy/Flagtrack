@@ -150,7 +150,7 @@ export function Toggle({ checked, onChange, label, description }: { checked: boo
 }
 
 /** Pill-style segmented control (reference: green active segment). */
-export function Segmented<T extends string>({ value, onChange, options, className }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[]; className?: string }) {
+export function Segmented<T extends string>({ value, onChange, options, className, compact }: { value: T; onChange: (v: T) => void; options: { value: T; label: string }[]; className?: string; compact?: boolean }) {
   return (
     <div role="tablist" className={cx('flex rounded-full bg-surface p-1 ring-1 ring-line/60', className)}>
       {options.map((o) => (
@@ -161,7 +161,8 @@ export function Segmented<T extends string>({ value, onChange, options, classNam
           aria-selected={value === o.value}
           onClick={() => onChange(o.value)}
           className={cx(
-            'flex-1 whitespace-nowrap rounded-full px-3 py-2 text-sm font-semibold transition',
+            'flex-1 whitespace-nowrap rounded-full py-2 font-semibold transition',
+            compact ? 'px-1.5 text-[13px] sm:px-3 sm:text-sm' : 'px-3 text-sm',
             value === o.value ? 'bg-accent text-accent-ink shadow' : 'text-muted hover:text-text',
           )}
         >

@@ -32,6 +32,7 @@ model User {
   xpEntries       XpEntry[]
   achievements    Achievement[]
   pushSubs        PushSubscription[]
+  exercises       ActivityExercise[]
 }
 
 model AthleteProfile {
@@ -101,12 +102,44 @@ model Activity {
   collectiveId    String?
   collective      Collective?        @relation(fields: [collectiveId], references: [id], onDelete: SetNull)
   attempts        ChallengeAttempt[]
+  exercises       ActivityExercise[]
+  /// Stopwatch: running since (null when paused/stopped) + seconds accumulated before it
+  timerStartedAt  DateTime?
+  timerElapsedSec Int                @default(0)
+  /// Real duration measured by the stopwatch when the activity was finished
+  actualDurationSec Int?
   createdAt       DateTime           @default(now())
   updatedAt       DateTime           @updatedAt
 
   @@unique([userId, clientId])
   @@index([userId, date])
   @@index([reminderAt])
+}
+
+/// Checklist item of an activity (exercise or task). Done items of the same
+/// exercise name form its progression history and personal records.
+model ActivityExercise {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activityId  String
+  activity    Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  order       Int
+  name        String
+  /// Normalized name (lowercase, no accents) grouping the exercise history
+  nameKey     String
+  sets        Int?
+  reps        Int?
+  loadKg      Float?
+  durationSec Int?
+  notes       String?
+  done        Boolean  @default(false)
+  doneAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([activityId, order])
+  @@index([userId, nameKey])
 }
 
 model Championship {

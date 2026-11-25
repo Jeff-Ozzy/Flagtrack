@@ -25,7 +25,12 @@ const MODELS: Record<string, Record<string, unknown>> = {
     id: undefined, userId: undefined, isDemo: false, clientId: undefined, seriesId: undefined, title: undefined, category: undefined, description: undefined,
     date: undefined, startTime: undefined, endTime: undefined, durationMin: undefined, location: undefined, notes: undefined, isFlagRelated: true,
     status: 'PLANNED', completionNotes: undefined, completedAt: undefined, startsAt: undefined, reminderType: 'NONE', reminderTime: undefined,
-    reminderAt: undefined, reminderSentAt: undefined, gameId: undefined, collectiveId: undefined, createdAt: NOW, updatedAt: UPDATED,
+    reminderAt: undefined, reminderSentAt: undefined, gameId: undefined, collectiveId: undefined, timerStartedAt: undefined, timerElapsedSec: 0,
+    actualDurationSec: undefined, createdAt: NOW, updatedAt: UPDATED,
+  },
+  activityExercise: {
+    id: undefined, userId: undefined, activityId: undefined, order: undefined, name: undefined, nameKey: undefined, sets: undefined, reps: undefined,
+    loadKg: undefined, durationSec: undefined, notes: undefined, done: false, doneAt: undefined, createdAt: NOW, updatedAt: UPDATED,
   },
   championship: {
     id: undefined, userId: undefined, isDemo: false, name: undefined, season: undefined, teamName: undefined, description: undefined, startDate: undefined,
@@ -79,6 +84,7 @@ const FKS: [string, string, string, 'Cascade' | 'SetNull'][] = [
   ['collectiveStat', 'collectiveId', 'collective', 'Cascade'],
   ['challengeAttempt', 'challengeId', 'challenge', 'Cascade'],
   ['challengeAttempt', 'activityId', 'activity', 'SetNull'],
+  ['activityExercise', 'activityId', 'activity', 'Cascade'],
 ];
 
 type Rel = { kind: 'toOne' | 'toMany' | 'reverseOne'; model: string; fk: string };
@@ -88,7 +94,9 @@ const RELATIONS: Record<string, Record<string, Rel>> = {
     game: { kind: 'toOne', model: 'game', fk: 'gameId' },
     collective: { kind: 'toOne', model: 'collective', fk: 'collectiveId' },
     attempts: { kind: 'toMany', model: 'challengeAttempt', fk: 'activityId' },
+    exercises: { kind: 'toMany', model: 'activityExercise', fk: 'activityId' },
   },
+  activityExercise: { activity: { kind: 'toOne', model: 'activity', fk: 'activityId' } },
   championship: { stages: { kind: 'toMany', model: 'stage', fk: 'championshipId' }, games: { kind: 'toMany', model: 'game', fk: 'championshipId' } },
   stage: { championship: { kind: 'toOne', model: 'championship', fk: 'championshipId' }, games: { kind: 'toMany', model: 'game', fk: 'stageId' } },
   game: {
@@ -395,7 +403,16 @@ export function createMemoryPrisma(opts: { onChange?: () => void; now?: () => Da
     async $disconnect() {},
     /** Replaces all data (used to load the persisted snapshot or a backup). */
     $load(data: Tables) {
-      tables = Object.fromEntries(Object.keys(MODELS).map((m) => [m, Array.isArray(data?.[m]) ? data[m].map((r) => ({ ...r })) : []]));
+      // Rows saved by older app versions get the columns added since then (with their defaults).
+      const fill = (m: string, r: Row): Row => {
+        const out: Row = { ...r };
+        for (const [k, d] of Object.entries(MODELS[m])) {
+          if (k in out) continue;
+          out[k] = d === undefined || d === NOW || d === UPDATED ? null : d;
+        }
+        return out;
+      };
+      tables = Object.fromEntries(Object.keys(MODELS).map((m) => [m, Array.isArray(data?.[m]) ? data[m].map((r) => fill(m, r)) : []]));
     },
     $dump(): Tables {
       return snapshot() as Tables;

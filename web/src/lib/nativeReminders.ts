@@ -63,3 +63,35 @@ export function onNotificationTap(go: (url: string) => void) {
     handle.then((h) => h.remove());
   };
 }
+
+/** Fixed id outside the range used by activity reminders. */
+const TIMER_NOTIFICATION_ID = 2_100_000_000;
+let timerShownFor: string | null = null;
+
+/**
+ * Persistent ("ongoing") notification while an activity stopwatch runs, so the
+ * athlete can get back to it from the notification shade. The time itself is
+ * computed from timestamps, so nothing needs to run in the background.
+ */
+export async function syncTimerNotification(t: { id: string; title: string; timerStartedAt: string | null } | null) {
+  const key = t?.timerStartedAt ? `${t.id}:${t.timerStartedAt}` : null;
+  if (key === timerShownFor) return;
+  if ((await notificationPermission()) !== 'granted') return;
+  await LocalNotifications.removeDeliveredNotifications({
+    notifications: [{ id: TIMER_NOTIFICATION_ID, title: '', body: '' }],
+  }).catch(() => undefined);
+  await LocalNotifications.cancel({ notifications: [{ id: TIMER_NOTIFICATION_ID }] }).catch(() => undefined);
+  timerShownFor = key;
+  if (!t?.timerStartedAt) return;
+  const since = new Date(t.timerStartedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  await LocalNotifications.schedule({
+    notifications: [{
+      id: TIMER_NOTIFICATION_ID,
+      title: `⏱ ${t.title} em andamento`,
+      body: `Cronômetro rodando desde ${since}. Toque para pausar ou finalizar.`,
+      ongoing: true,
+      autoCancel: false,
+      extra: { url: `/activities/${t.id}` },
+    }],
+  });
+}
